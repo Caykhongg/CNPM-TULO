@@ -117,7 +117,7 @@
 > ⚠️ Cấu trúc dưới đây là bản dự kiến, sẽ được cập nhật khi dự án phát triển.
 
 ```
-foodie-app/
+quickorder.app/
 │
 ├── public/                     # Tài nguyên tĩnh
 │   ├── favicon.ico
