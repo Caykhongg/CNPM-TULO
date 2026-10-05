@@ -117,24 +117,80 @@
 > ⚠️ Cấu trúc dưới đây là bản dự kiến, sẽ được cập nhật khi dự án phát triển.
 
 ```
-CNPM-TULO/
-├── app/
-│   ├── __init__.py          # Khởi tạo Flask app
-│   ├── models.py            # Các model SQLAlchemy
-│   ├── auth/                # Đăng ký, đăng nhập, phân quyền
-│   ├── customer/            # Xem quán, menu, giỏ hàng, đơn hàng
-│   ├── owner/               # Quản lý quán, menu, đơn, thống kê
-│   ├── admin/               # Trang quản trị
-│   ├── api/                 # Endpoint JSON (AJAX)
-│   ├── templates/           # Giao diện Jinja2
-│   └── static/              # CSS, JS, hình ảnh
-├── docs/                    # Tài liệu dự án (SRS, thiết kế, test case...)
-├── tests/                   # Mã kiểm thử tự động
-├── config.py                # Cấu hình ứng dụng
-├── run.py                   # Điểm chạy ứng dụng
-├── requirements.txt         # Danh sách thư viện
-├── .env.example             # Mẫu biến môi trường
-└── README.md
+foodie-app/
+│
+├── public/                     # Tài nguyên tĩnh
+│   ├── favicon.ico
+│   └── assets/
+│       ├── icons/              # SVG icons (home, cart, user, merchant, etc.)
+│       └── images/             # Hình ảnh logo, banner, món ăn mặc định
+│
+├── src/                        # Mã nguồn chính của dự án
+│   ├── assets/                 # CSS/Tailwind styles
+│   │   └── main.css            # Styles toàn cục & custom utilities
+│   │
+│   ├── components/             # Các Component tái sử dụng
+│   │   ├── common/             # Component dùng chung cho cả 2 role
+│   │   │   ├── Header.js / .jsx
+│   │   │   ├── BottomNav.js / .jsx
+│   │   │   ├── Modal.js / .jsx
+│   │   │   └── SearchBar.js / .jsx
+│   │   │
+│   │   ├── customer/           # Component riêng cho Người dùng
+│   │   │   ├── CategoryList.js
+│   │   │   ├── RestaurantCard.js
+│   │   │   ├── MenuItemCard.js
+│   │   │   ├── CartDrawer.js
+│   │   │   └── OrderTracker.js
+│   │   │
+│   │   └── merchant/           # Component riêng cho Chủ quán
+│   │       ├── StatCard.js
+│   │       ├── OrderStatusBadge.js
+│   │       ├── MerchantOrderItem.js
+│   │       ├── MenuManageItem.js
+│   │       └── RevenueChart.js
+│   │
+│   ├── pages/                  # Các Màn hình (Screens) theo đúng UI thiết kế
+│   │   ├── customer/           # 7 Màn hình Người dùng
+│   │   │   ├── WelcomeScreen.js        # 1. Màn hình chào mừng
+│   │   │   ├── HomeScreen.js           # 2. Trang chủ
+│   │   │   ├── SearchScreen.js         # 3. Kết quả tìm kiếm
+│   │   │   ├── RestaurantDetailScreen.js # 4. Chi tiết & thực đơn
+│   │   │   ├── CartScreen.js           # 5. Giỏ hàng & Thanh toán
+│   │   │   ├── OrderTrackingScreen.js  # 6. Theo dõi đơn hàng
+│   │   │   └── ProfileScreen.js        # 7. Hồ sơ cá nhân
+│   │   │
+│   │   └── merchant/           # 6 Màn hình Chủ quán
+│   │       ├── LoginScreen.js          # 1. Đăng nhập
+│   │       ├── DashboardScreen.js      # 2. Trang chủ (Dashboard)
+│   │       ├── MenuManageScreen.js     # 3. Quản lý thực đơn
+│   │       ├── OrderManageScreen.js    # 4. Quản lý đơn hàng
+│   │       ├── RevenueScreen.js        # 5. Thống kê doanh thu
+│   │       └── MerchantProfileScreen.js# 6. Tài khoản chủ quán
+│   │
+│   ├── services/               # Kết nối API Backend & Database
+│   │   ├── api.config.js       # Cấu hình Axios / Fetch Base URL
+│   │   ├── auth.service.js     # API Đăng nhập, Đăng ký, Token
+│   │   ├── restaurant.service.js # API Quán ăn & Món ăn
+│   │   ├── order.service.js    # API Đặt hàng & Cập nhật trạng thái
+│   │   └── merchant.service.js # API Doanh thu & Quản lý thực đơn
+│   │
+│   ├── context/                # Quản lý State toàn cục (State Management)
+│   │   ├── AuthContext.js      # Lưu thông tin user/merchant đã đăng nhập
+│   │   ├── CartContext.js      # Lưu giỏ hàng, tính tổng tiền
+│   │   └── RoleContext.js      # Chuyển đổi giữa Customer / Merchant
+│   │
+│   ├── utils/                  # Hàm tiện ích dùng chung
+│   │   ├── formatCurrency.js   # Format tiền tệ (VD: 55.000đ)
+│   │   ├── formatDate.js       # Format ngày tháng/thời gian
+│   │   └── constants.js        # Khai báo hằng số (Trạng thái đơn, Roles)
+│   │
+│   ├── App.js                  # Component điều hướng chính (Router)
+│   └── index.js                # Entry point
+│
+├── .env                        # Biến môi trường (URL API, Keys)
+├── package.json                # Dependencies & Scripts
+└── README.md                   # Hướng dẫn chạy dự án
 ```
 
 ## 🚀 Hướng dẫn cài đặt và chạy
