@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="vi" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0f172a">
+    <title>Foodie - Giỏ hàng</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        foodie: {
+                            red: '#EE4D2D',
+                            redDark: '#D03E1F',
+                            orange: '#FF6B00',
+                            green: '#00B14F',
+                            greenDark: '#00883C'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../css/style.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="h-full min-h-screen bg-slate-50 text-slate-800 font-sans">
+    <div id="app-shell">
+        <!-- Top Global Switcher Header -->
+    <header class="w-full bg-slate-900 border-b border-slate-800 text-white p-3 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-xl z-50">
+        <div class="flex items-center gap-3">
+            <div id="brand-logo-icon" class="w-9 h-9 bg-foodie-red rounded-xl flex items-center justify-center font-black text-xl shadow-lg transition-colors">
+                F
+            </div>
+            <div>
+                <h1 class="font-bold text-sm sm:text-base flex items-center gap-2">
+                    Foodie Platform Prototype
+                    <span id="role-badge" class="text-[10px] bg-foodie-red/20 text-foodie-red font-semibold px-2 py-0.5 rounded-full border border-foodie-red/30">
+                        Người Dùng
+                    </span>
+                </h1>
+                <p class="text-xs text-slate-400">Chuyển đổi giao diện để trải nghiệm cả 2 góc nhìn</p>
+            </div>
+        </div>
+
+        <!-- Role Toggle Tabs -->
+        <div class="flex bg-slate-800 p-1 rounded-xl w-full sm:w-auto">
+            <button onclick="switchRole('customer')" id="role-btn-customer" 
+                    class="flex-1 sm:flex-initial px-5 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 bg-foodie-red text-white shadow-md">
+                <i data-lucide="user" class="w-4 h-4"></i>
+                <span>Người Dùng</span>
+            </button>
+            <button onclick="switchRole('merchant')" id="role-btn-merchant" 
+                    class="flex-1 sm:flex-initial px-5 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 text-slate-400 hover:text-white">
+                <i data-lucide="store" class="w-4 h-4"></i>
+                <span>Chủ Quán</span>
+            </button>
+        </div>
+    </header>
+        <main class="app-main">
+            <div class="app-screen responsive-content">
+                <section id="cust-screen-cart" class="p-4 space-y-4">
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                        <h3 class="font-bold text-base text-slate-800">Giỏ hàng</h3>
+                        <button onclick="clearCart()" class="text-xs text-slate-400 hover:text-red-500">Xóa tất cả</button>
+                    </div>
+
+                    <!-- Order Progress Stepper -->
+                    <div class="flex items-center justify-between px-4 py-2 bg-slate-100 rounded-xl">
+                        <div class="flex flex-col items-center gap-1">
+                            <span class="w-5 h-5 rounded-full bg-foodie-red text-white text-[10px] font-bold flex items-center justify-center">1</span>
+                            <span class="text-[9px] font-bold text-foodie-red">Đặt hàng</span>
+                        </div>
+                        <div class="h-0.5 flex-1 bg-slate-300 mx-2"></div>
+                        <div class="flex flex-col items-center gap-1">
+                            <span class="w-5 h-5 rounded-full bg-slate-300 text-slate-600 text-[10px] font-bold flex items-center justify-center">2</span>
+                            <span class="text-[9px] text-slate-400">Đang nấu</span>
+                        </div>
+                        <div class="h-0.5 flex-1 bg-slate-300 mx-2"></div>
+                        <div class="flex flex-col items-center gap-1">
+                            <span class="w-5 h-5 rounded-full bg-slate-300 text-slate-600 text-[10px] font-bold flex items-center justify-center">3</span>
+                            <span class="text-[9px] text-slate-400">Đang giao</span>
+                        </div>
+                    </div>
+
+                    <!-- Cart Item List -->
+                    <div class="space-y-3" id="cart-items-container">
+                        <div class="bg-white p-3 rounded-2xl border border-slate-100 flex items-center justify-between">
+                            <div>
+                                <h5 class="font-bold text-xs text-slate-800">Bún bò Huế đặc biệt</h5>
+                                <p class="text-xs text-foodie-red font-bold mt-0.5">55.000đ</p>
+                            </div>
+                            <div class="flex items-center gap-2 bg-slate-100 px-2 py-1 rounded-xl">
+                                <button class="w-5 h-5 text-slate-600 font-bold text-xs">-</button>
+                                <span class="text-xs font-bold text-slate-800">1</span>
+                                <button class="w-5 h-5 text-slate-600 font-bold text-xs">+</button>
+                            </div>
+                        </div>
+                        <div class="bg-white p-3 rounded-2xl border border-slate-100 flex items-center justify-between">
+                            <div>
+                                <h5 class="font-bold text-xs text-slate-800">Trà tắc khổng lồ</h5>
+                                <p class="text-xs text-foodie-red font-bold mt-0.5">15.000đ</p>
+                            </div>
+                            <div class="flex items-center gap-2 bg-slate-100 px-2 py-1 rounded-xl">
+                                <button class="w-5 h-5 text-slate-600 font-bold text-xs">-</button>
+                                <span class="text-xs font-bold text-slate-800">1</span>
+                                <button class="w-5 h-5 text-slate-600 font-bold text-xs">+</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Summary Price -->
+                    <div class="bg-white p-3.5 rounded-2xl border border-slate-100 space-y-2 text-xs">
+                        <div class="flex justify-between text-slate-500">
+                            <span>Tạm tính</span>
+                            <span id="cart-subtotal" class="font-semibold text-slate-800">0đ</span>
+                        </div>
+                        <div class="flex justify-between text-slate-500">
+                            <span>Phí giao hàng</span>
+                            <span id="cart-delivery" class="font-semibold text-slate-800">0đ</span>
+                        </div>
+                        <div class="border-t border-slate-100 pt-2 flex justify-between text-sm font-extrabold text-slate-800">
+                            <span>Tổng cộng</span>
+                            <span id="cart-total" class="text-foodie-red">0đ</span>
+                        </div>
+                    </div>
+
+                    <button onclick="navigateCustomerTab('tracking')" class="w-full py-3.5 bg-foodie-red text-white text-xs font-bold rounded-2xl shadow-lg shadow-foodie-red/30 hover:bg-foodie-redDark transition">
+                        Đặt hàng
+                    </button>
+                </section>
+            </div>
+            <!-- Customer Bottom Navigation Bar -->
+            <nav class="absolute bottom-0 left-0 right-0 h-14 bg-white border-t border-slate-200 flex items-center justify-around z-20">
+                <button onclick="navigateCustomerTab('home')" id="cust-nav-home" class="flex flex-col items-center gap-0.5 text-foodie-red">
+                    <i data-lucide="home" class="w-4 h-4"></i>
+                    <span class="text-[9px] font-bold">Trang chủ</span>
+                </button>
+                <button onclick="navigateCustomerTab('tracking')" id="cust-nav-tracking" class="flex flex-col items-center gap-0.5 text-slate-400 hover:text-slate-600">
+                    <i data-lucide="clipboard-list" class="w-4 h-4"></i>
+                    <span class="text-[9px] font-bold">Đơn hàng</span>
+                </button>
+                <button onclick="navigateCustomerTab('cart')" id="cust-nav-cart" class="flex flex-col items-center gap-0.5 text-slate-400 hover:text-slate-600">
+                    <i data-lucide="heart" class="w-4 h-4"></i>
+                    <span class="text-[9px] font-bold">Yêu thích</span>
+                </button>
+                <button onclick="navigateCustomerTab('profile')" id="cust-nav-profile" class="flex flex-col items-center gap-0.5 text-slate-400 hover:text-slate-600">
+                    <i data-lucide="user" class="w-4 h-4"></i>
+                    <span class="text-[9px] font-bold">Tài khoản</span>
+                </button>
+            </nav>
+        </main>
+        <div id="app-toast"
+    class="fixed top-4 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-xs font-semibold
+           px-4 py-2 rounded-full shadow-2xl z-[100] transition-all duration-300
+           pointer-events-none opacity-0 translate-y-[-10px] flex items-center gap-2">
+    <span id="toast-message">Thông báo</span>
+</div>
+    </div>
+    <script src="../js/script.js"></script>
+</body>
+</html>

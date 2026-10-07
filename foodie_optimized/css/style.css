@@ -1,0 +1,69 @@
+/* Foodie - shared custom CSS
+   Tailwind handles utility/layout classes; this file contains only reusable
+   project-specific CSS and responsive full-screen behavior.
+*/
+
+/* Custom scrollbar and phone frame styling */
+        ::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #CBD5E1;
+            border-radius: 9999px;
+        }
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+html, body {
+    width: 100%;
+    min-height: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    min-height: 100dvh;
+    overflow-x: hidden;
+}
+
+#app-shell {
+    width: 100%;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+}
+
+.app-main {
+    width: 100%;
+    min-height: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.app-screen {
+    width: 100%;
+    min-height: 0;
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 640px) {
+    body {
+        font-size: 15px;
+    }
+}
+
+@media (min-width: 641px) {
+    .responsive-content {
+        width: 100%;
+        margin-inline: auto;
+    }
+}
