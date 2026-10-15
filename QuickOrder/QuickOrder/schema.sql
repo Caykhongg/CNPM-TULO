@@ -1,0 +1,90 @@
+PRAGMA foreign_keys = ON;
+
+-- An toàn khi chạy nhiều lần: KHÔNG xóa dữ liệu cũ.
+-- Muốn làm lại từ đầu: python init_db.py --reset
+
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    full_name TEXT NOT NULL DEFAULT '',
+    email TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    phone TEXT,
+    password_hash TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'owner' CHECK (role IN ('customer', 'owner', 'admin')),
+    is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS shops (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    address TEXT NOT NULL,
+    phone TEXT NOT NULL,
+    open_time TEXT,
+    close_time TEXT,
+    bank_account_number TEXT,
+    payment_qr_image TEXT,
+    status TEXT NOT NULL DEFAULT 'PENDING'
+        CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED', 'LOCKED')),
+    status_note TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (owner_id) REFERENCES users(id) ON UPDATE CASCADE ON DELETE RESTRICT
+);
+
+CREATE TABLE IF NOT EXISTS shop_tables (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    shop_id INTEGER NOT NULL,
+    table_number TEXT NOT NULL COLLATE NOCASE,
+    qr_token TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (shop_id) REFERENCES shops(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    UNIQUE (shop_id, table_number)
+);
+
+CREATE TABLE IF NOT EXISTS categories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS dishes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    shop_id INTEGER NOT NULL,
+    category_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    price INTEGER NOT NULL CHECK (price >= 0),
+    is_available INTEGER NOT NULL DEFAULT 1 CHECK (is_available IN (0, 1)),
+    is_deleted INTEGER NOT NULL DEFAULT 0 CHECK (is_deleted IN (0, 1)),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (shop_id) REFERENCES shops(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    FOREIGN KEY (category_id) REFERENCES categories(id) ON UPDATE CASCADE ON DELETE RESTRICT
+);
+
+CREATE TABLE IF NOT EXISTS option_groups (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    dish_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    is_required INTEGER NOT NULL DEFAULT 0 CHECK (is_required IN (0, 1)),
+    is_multiple INTEGER NOT NULL DEFAULT 0 CHECK (is_multiple IN (0, 1)),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (dish_id) REFERENCES dishes(id) ON UPDATE CASCADE ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS options (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    group_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    extra_price INTEGER NOT NULL DEFAULT 0 CHECK (extra_price >= 0),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (group_id) REFERENCES option_groups(id) ON UPDATE CASCADE ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_shops_owner ON shops(owner_id);
+CREATE INDEX IF NOT EXISTS idx_tables_shop ON shop_tables(shop_id);
+CREATE INDEX IF NOT EXISTS idx_dishes_shop ON dishes(shop_id);
+CREATE INDEX IF NOT EXISTS idx_dishes_cat ON dishes(category_id);
+CREATE INDEX IF NOT EXISTS idx_groups_dish ON option_groups(dish_id);
+CREATE INDEX IF NOT EXISTS idx_options_group ON options(group_id);
+
+INSERT OR IGNORE INTO categories (name) VALUES
+    ('Cà phê'), ('Trà'), ('Trà sữa'), ('Đồ ăn'), ('Nước giải khát');

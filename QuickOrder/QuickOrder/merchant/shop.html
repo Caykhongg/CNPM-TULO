@@ -1,0 +1,18 @@
+<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>QuickOrder - Chủ quán</title><link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="../css/style.css"><script src="../js/app.js"></script></head><body>
+<div class="wrap" style="max-width:720px"><div class="row"><h1>Thông tin quán</h1><span id="st"></span></div><p class="sub" id="note">Điền thông tin để gửi quán lên duyệt.</p>
+<form class="card" id="f">
+  <label class="field"><span>Tên quán</span><input name="name" required></label>
+  <label class="field"><span>Địa chỉ</span><input name="address" required></label>
+  <label class="field"><span>Số điện thoại quán</span><input name="phone" type="tel" required></label>
+  <div class="two"><label class="field"><span>Giờ mở cửa</span><input name="open_time" type="time" required></label><label class="field"><span>Giờ đóng cửa (có thể qua nửa đêm)</span><input name="close_time" type="time" required></label></div>
+  <div class="two"><label class="field"><span>Số tài khoản nhận tiền</span><input name="bank_account_number" inputmode="numeric"></label><label class="field"><span>Ảnh QR thanh toán (đường dẫn)</span><input name="payment_qr_image"></label></div>
+  <div class="row" style="justify-content:flex-end"><button class="btn">Lưu thông tin</button></div></form></div>
+<script>
+QO.header('merchant');
+(async () => { const u = await QO.requireOwner(); let shop = await QO.myShop(); const f = document.getElementById('f');
+  const show = () => { if (!shop) return; for (const k of ['name','address','phone','open_time','close_time','bank_account_number','payment_qr_image']) f.elements[k].value = shop[k] || '';
+    const [t, c] = QO.STATUS[shop.status]; st.innerHTML = '<span class="tag ' + c + '">' + t + '</span>'; note.textContent = shop.status_note ? 'Ghi chú từ quản trị: ' + shop.status_note : (shop.status === 'PENDING' ? 'Quán đang chờ quản trị viên duyệt.' : ''); };
+  show();
+  f.onsubmit = async e => { e.preventDefault(); const v = Object.fromEntries(new FormData(f));
+    shop = await QO.put('shops', {...(shop || {owner_id: u.id, status: 'PENDING', status_note: ''}), ...v, name: v.name.trim(), address: v.address.trim()}); show(); QO.toast('Đã lưu thông tin quán'); }; })();
+</script></body></html>
