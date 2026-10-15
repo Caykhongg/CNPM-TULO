@@ -273,15 +273,15 @@ Toàn bộ tài liệu nằm trong thư mục [`docs/`](./docs).
 
 | Tài liệu | Trạng thái |
 |---|---|
-| Danh sách chức năng | ⬜ Chưa làm |
-| Đặc tả yêu cầu phần mềm (SRS) | ⬜ Chưa làm |
-| Use Case | ⬜ Chưa làm |
-| User Story | ⬜ Chưa làm |
-| Thiết kế CSDL (ERD) | ⬜ Chưa làm |
-| Class Diagram | ⬜ Chưa làm |
-| Sequence Diagram | ⬜ Chưa làm |
-| Wireframe (Figma) | ⬜ Chưa làm |
-| Cấu trúc Route/API | ⬜ Chưa làm |
+| Danh sách chức năng | ⬜ done |
+| Đặc tả yêu cầu phần mềm (SRS) | ⬜ done |
+| Use Case | ⬜ done |
+| User Story | ⬜ done |
+| Thiết kế CSDL (ERD) | ⬜ done |
+| Class Diagram | ⬜ done |
+| Sequence Diagram | ⬜ done |
+| Wireframe (Figma) | ⬜ done |
+| Cấu trúc Route/API | ⬜ done |
 | Test case và báo cáo kiểm thử | ⬜ Chưa làm |
 
 ## 🤝 Quy trình làm việc nhóm
