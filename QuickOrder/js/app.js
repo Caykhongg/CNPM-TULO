@@ -28,7 +28,7 @@ const QO = (() => {
   // ===== Tiện ích =====
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const money = n => Number(n).toLocaleString('vi-VN') + 'đ';
-  const norm = s => String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/g,'d');
+  const norm = s => String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/đ/g,'d');
   const hash = async raw => { if (crypto.subtle) { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw));
     return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2,'0')).join(''); }
     let h = 5381; for (const c of raw) h = (h*33) ^ c.charCodeAt(0); return 'x' + (h>>>0).toString(16); };
@@ -36,25 +36,26 @@ const QO = (() => {
     t.textContent = m; t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 2200); };
   const param = k => new URLSearchParams(location.search).get(k);
 
-  // Phiên chủ quán (không có đăng nhập cho khách)
-  const me = () => Number(sessionStorage.getItem('qo_user')) || null;
-  const login = id => sessionStorage.setItem('qo_user', id);
-  const logout = () => { sessionStorage.removeItem('qo_user'); location.href = 'login.html'; };
-  const requireOwner = async () => { const id = me(); const u = id && await get('users', id);
-    if (!u) { location.replace('login.html'); throw 0; } return u; };
-  const myShop = async () => (await by('shops', 'owner_id', me()))[0];
+  // Phiên đăng nhập nằm trên server (cookie HttpOnly). Trình duyệt không lưu và không tự quyết quyền truy cập.
+  const session = async () => { try { return await api('GET', 'me'); } catch { return null; } };
+  const logout = async () => { try { await api('POST', 'logout'); } catch {} location.href = 'login.html'; };
+  const requireOwner = async () => { const u = await session();
+    if (!u || u.role !== 'owner') { location.replace('login.html'); throw 0; } return u; };
+  const myShop = async () => { const u = await session();
+    return u && u.role === 'owner' ? (await by('shops', 'owner_id', u.id))[0] : undefined; };
 
   // Giỏ hàng (lớp phiên, lưu localStorage)
   const getCart = () => { try { return JSON.parse(localStorage.getItem('qo_cart')) || {shop_id:null, table:null, items:[]}; } catch { return {shop_id:null, table:null, items:[]}; } };
   const setCart = c => { localStorage.setItem('qo_cart', JSON.stringify(c)); badge(); };
   const badge = () => { const n = getCart().items.reduce((s, i) => s + i.qty, 0), b = document.getElementById('cart-n'); if (b) b.textContent = n || ''; if (b) b.style.display = n ? '' : 'none'; };
 
+  // Menu. Trang chủ quán hiện menu cho mọi người; trang đăng nhập không có menu.
   const header = kind => { const file = location.pathname.split('/').pop(); const a = f => f === file ? ' class="on"' : '';
     const nav = kind === 'merchant'
-      ? (me() ? `<a href="shop.html"${a('shop.html')}>Quán</a><a href="tables.html"${a('tables.html')}>Bàn</a><a href="menu.html"${a('menu.html')}>Menu</a><button onclick="QO.logout()">Đăng xuất</button>` : '')
-      : `<a href="home.html"${a('home.html')}>Khám phá</a><a href="cart.html"${a('cart.html')}>Giỏ hàng<span class="badge-n" id="cart-n"></span></a><a href="../merchant/login.html">Dành cho chủ quán</a>`;
-    document.body.insertAdjacentHTML('afterbegin', `<header class="topbar"><div class="in"><a class="logo" href="${kind==='merchant'?'shop.html':'home.html'}">Quick<b>Order</b></a><nav class="nav">${nav}</nav></div></header>`); badge(); };
+      ? (file === 'login.html' ? '' : `<a href="dashboard.html"${a('dashboard.html')}>Tổng quan</a><a href="orders.html"${a('orders.html')}>Đơn hàng</a><a href="menu.html"${a('menu.html')}>Thực đơn</a><a href="tables.html"${a('tables.html')}>Bàn &amp; QR</a><a href="revenue.html"${a('revenue.html')}>Doanh thu</a><a href="shop.html"${a('shop.html')}>Hồ sơ quán</a><button onclick="QO.logout()">Đăng xuất</button>`)
+      : `<a href="home.html"${a('home.html')}>Khám phá</a><a href="orders.html"${a('orders.html')}>Đơn hàng</a><a href="cart.html"${a('cart.html')}>Giỏ hàng<span class="badge-n" id="cart-n"></span></a><a href="profile.html"${a('profile.html')}>Hồ sơ</a><a href="../merchant/login.html">Dành cho chủ quán</a>`;
+    document.body.insertAdjacentHTML('afterbegin', `<header class="topbar"><div class="in"><a class="logo" href="${kind==='merchant'?'dashboard.html':'home.html'}">Quick<b>Order</b></a><nav class="nav">${nav}</nav></div></header>`); badge(); };
 
   return {api, all, get, by, put, del, isOpenNow, isAccepting, isOrderable, validateSelection, newToken, qrUrl, STATUS,
-    esc, money, norm, hash, toast, param, me, login, logout, requireOwner, myShop, getCart, setCart, header};
+    esc, money, norm, hash, toast, param, session, logout, requireOwner, myShop, getCart, setCart, header};
 })();

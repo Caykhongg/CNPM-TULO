@@ -1,0 +1,67 @@
+<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Khám phá - QuickOrder</title><link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="../css/style.css"><script src="../js/app.js"></script></head><body>
+<div class="wrap">
+  <section class="hero">
+    <h1>Gọi món nhanh, ngồi là có</h1>
+    <p>Tìm quán, tìm món theo danh mục, xem menu ngay.</p>
+    <div class="search"><input id="q" type="search" placeholder="Tìm tên quán, địa chỉ hoặc tên món..." autocomplete="off" aria-label="Tìm quán hoặc món"></div>
+  </section>
+  <h2>Danh mục</h2>
+  <div class="chips" id="cats" aria-label="Lọc theo danh mục"></div>
+  <div id="out"></div>
+</div>
+<script>
+QO.header('customer');
+(async () => {
+  const [shops, dishes, cats] = await Promise.all([QO.all('shops'), QO.all('dishes'), QO.all('categories')]);
+  const live = shops.filter(s => s.status === 'APPROVED');
+  const byShop = Object.fromEntries(live.map(s => [s.id, s]));
+  const menu = dishes.filter(d => !d.is_deleted && byShop[d.shop_id]);
+  const catsEl = document.getElementById('cats'), out = document.getElementById('out'), input = document.getElementById('q');
+  let q = '', cat = 0;
+
+  const renderCats = () => {
+    const used = cats.filter(c => menu.some(d => d.category_id === c.id));
+    catsEl.innerHTML = used.length
+      ? `<button class="chip${cat ? '' : ' on'}" data-c="0">Tất cả</button>` + used.map(c => `<button class="chip${cat === c.id ? ' on' : ''}" data-c="${c.id}">${QO.esc(c.name)}</button>`).join('')
+      : '<span class="meta">Chưa có danh mục nào.</span>';
+  };
+
+  const shopCard = s => {
+    const open = QO.isAccepting(s);
+    return `<a class="card shop" href="restaurant.html?id=${s.id}">
+      <div class="row"><h3>${QO.esc(s.name)}</h3><span class="tag ${open ? 'ok' : 'no'}">${open ? 'Đang nhận đơn' : 'Đóng cửa'}</span></div>
+      <div class="meta">${QO.esc(s.address)}</div>
+      <div class="meta">${QO.esc(s.open_time)} – ${QO.esc(s.close_time)} · ${QO.esc(s.phone)}</div>
+    </a>`;
+  };
+
+  const dishCard = d => {
+    const s = byShop[d.shop_id], c = cats.find(x => x.id === d.category_id), ok = QO.isOrderable(d);
+    return `<a class="item${ok ? '' : ' off'}" href="restaurant.html?id=${s.id}&amp;q=${encodeURIComponent(d.name)}">
+      <div><h3>${QO.esc(d.name)}</h3><div class="meta">${QO.esc(s.name)}${c ? ' · ' + QO.esc(c.name) : ''}</div></div>
+      <div style="text-align:right"><div class="price">${QO.money(d.price)}</div>${ok ? '' : '<span class="tag no">Hết món</span>'}</div>
+    </a>`;
+  };
+
+  const render = () => {
+    renderCats();
+    const k = QO.norm(q.trim());
+    const dh = menu.filter(d => (!cat || d.category_id === cat) && (!k || QO.norm(d.name).includes(k)));
+    const withDish = new Set(dh.map(d => d.shop_id));
+    const sh = live
+      .filter(s => (!cat || withDish.has(s.id)) && (!k || QO.norm(s.name + ' ' + s.address).includes(k) || withDish.has(s.id)))
+      .sort((a, b) => Number(QO.isAccepting(b)) - Number(QO.isAccepting(a)));
+
+    if (!live.length) { out.innerHTML = '<div class="empty"><b>Chưa có quán nào</b>Quán được duyệt sẽ hiển thị ở đây.</div>'; return; }
+    out.innerHTML = `<h2>Quán (${sh.length})</h2>`
+      + (sh.length ? `<div class="grid">${sh.map(shopCard).join('')}</div>` : '<div class="empty"><b>Không thấy quán phù hợp</b>Thử từ khóa hoặc danh mục khác.</div>')
+      + ((k || cat)
+        ? `<h2 style="margin-top:28px">Món (${dh.length})</h2>` + (dh.length ? `<div class="list">${dh.map(dishCard).join('')}</div>` : '<div class="empty"><b>Không có món phù hợp</b></div>')
+        : '');
+  };
+
+  input.oninput = e => { q = e.target.value; render(); };
+  catsEl.onclick = e => { const b = e.target.closest('[data-c]'); if (b) { cat = Number(b.dataset.c); render(); } };
+  render();
+})();
+</script></body></html>

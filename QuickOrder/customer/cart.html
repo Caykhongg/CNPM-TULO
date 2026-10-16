@@ -1,0 +1,89 @@
+<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Giỏ hàng - QuickOrder</title><link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="../css/style.css"><script src="../js/app.js"></script></head><body>
+<div class="wrap">
+  <a class="meta" href="home.html">← Tiếp tục chọn món</a>
+  <h1 style="margin-top:8px">Giỏ hàng</h1>
+  <p class="sub" id="from"></p>
+  <div class="cart-grid">
+    <section id="box"></section>
+    <aside class="card" id="checkout">
+      <h2>Tóm tắt</h2>
+      <div id="sum"></div>
+      <h2 style="margin-top:20px">Nhận món</h2>
+      <div class="field"><span>Hình thức</span><div class="chips" id="modes" style="margin:0"></div></div>
+      <label class="field"><span>Họ tên</span><input name="name" autocomplete="name" placeholder="Tên người nhận"></label>
+      <label class="field"><span>Số điện thoại</span><input name="phone" type="tel" autocomplete="tel"></label>
+      <div class="field"><span>Thanh toán</span><div class="chips" id="pays" style="margin:0"></div></div>
+      <div class="meta" id="pay" style="margin:-4px 0 12px"></div>
+      <label class="field"><span>Ghi chú</span><textarea name="note" rows="2" placeholder="VD: ít đá, không hành"></textarea></label>
+      <button class="btn" type="button" id="order" disabled style="width:100%">Đặt hàng</button>
+      <p class="meta" style="margin-top:10px">Đặt hàng đang được phát triển. Khi có chức năng đơn hàng, nút này sẽ được mở.</p>
+    </aside>
+  </div>
+</div>
+<script>
+QO.header('customer');
+(async () => {
+  const box = document.getElementById('box'), sum = document.getElementById('sum'), from = document.getElementById('from');
+  const checkout = document.getElementById('checkout'), modesEl = document.getElementById('modes'), paysEl = document.getElementById('pays'), payEl = document.getElementById('pay');
+  let shop = null, mode = '', method = 'cash';
+
+  const line = i => (i.price + i.options.reduce((s, o) => s + o.extra_price, 0)) * i.qty;
+
+  const renderPay = () => {
+    if (method !== 'transfer') { payEl.textContent = 'Thanh toán tiền mặt khi nhận món hoặc tại quầy.'; return; }
+    if (!shop) { payEl.textContent = ''; return; }
+    const info = shop.bank_account_number ? 'Số tài khoản: ' + QO.esc(shop.bank_account_number) : 'Quán chưa cập nhật số tài khoản.';
+    // Chỉ cho phép liên kết http(s) để tránh javascript: từ dữ liệu quán
+    const qr = /^https?:\/\//i.test(shop.payment_qr_image || '') ? ` · <a href="${QO.esc(shop.payment_qr_image)}" target="_blank" rel="noopener">Xem mã QR</a>` : '';
+    payEl.innerHTML = info + qr;
+  };
+
+  const draw = async () => {
+    const c = QO.getCart();
+    shop = c.shop_id ? await QO.get('shops', c.shop_id) : null;
+    from.textContent = shop ? 'Quán: ' + shop.name : '';
+
+    if (!c.items.length) {
+      box.innerHTML = '<div class="empty"><b>Giỏ hàng trống</b><a class="btn" href="home.html">Chọn món</a></div>';
+      checkout.style.display = 'none';
+      return;
+    }
+    checkout.style.display = '';
+
+    const total = c.items.reduce((s, i) => s + line(i), 0), count = c.items.reduce((s, i) => s + i.qty, 0);
+    box.innerHTML = '<div class="list">' + c.items.map(i => `
+      <div class="item">
+        <div><h3>${QO.esc(i.name)}</h3><div class="meta">${QO.esc(i.options.map(o => o.name).join(', ') || 'Không tùy chọn')}</div></div>
+        <div class="acts">
+          <button class="btn ghost sm" data-d="${QO.esc(i.key)}" data-n="-1" aria-label="Giảm số lượng">−</button>
+          <b>${i.qty}</b>
+          <button class="btn ghost sm" data-d="${QO.esc(i.key)}" data-n="1" aria-label="Tăng số lượng">+</button>
+          <span class="price" style="min-width:90px;text-align:right">${QO.money(line(i))}</span>
+        </div>
+      </div>`).join('') + '</div>';
+
+    sum.innerHTML = `<div class="kv"><span>Số món</span><b>${count}</b></div>
+      <div class="row" style="margin-top:12px"><b>Tổng cộng</b><span class="price" style="font-size:20px">${QO.money(total)}</span></div>`;
+
+    const modeList = c.table ? [['dine', 'Tại bàn']] : [['pickup', 'Tự đến lấy'], ['delivery', 'Giao tận nơi']];
+    if (!modeList.some(([v]) => v === mode)) mode = modeList[0][0];
+    modesEl.innerHTML = modeList.map(([v, t]) => `<button type="button" class="chip${mode === v ? ' on' : ''}" data-mode="${v}">${t}</button>`).join('');
+    paysEl.innerHTML = [['cash', 'Tiền mặt'], ['transfer', 'Chuyển khoản / QR']]
+      .map(([v, t]) => `<button type="button" class="chip${method === v ? ' on' : ''}" data-pay="${v}">${t}</button>`).join('');
+    renderPay();
+  };
+
+  box.onclick = e => {
+    const b = e.target.closest('[data-d]'); if (!b) return;
+    const c = QO.getCart(), i = c.items.find(x => x.key === b.dataset.d);
+    if (!i) return;
+    i.qty += Number(b.dataset.n);
+    c.items = c.items.filter(x => x.qty > 0);
+    QO.setCart(c); draw();
+  };
+  modesEl.onclick = e => { const b = e.target.closest('[data-mode]'); if (b) { mode = b.dataset.mode; draw(); } };
+  paysEl.onclick = e => { const b = e.target.closest('[data-pay]'); if (b) { method = b.dataset.pay; draw(); } };
+
+  draw();
+})();
+</script></body></html>

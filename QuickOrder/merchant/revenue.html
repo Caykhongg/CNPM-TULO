@@ -1,0 +1,26 @@
+<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Doanh thu - QuickOrder</title><link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="../css/style.css"><script src="../js/app.js"></script></head><body>
+<div class="wrap">
+  <h1>Doanh thu</h1>
+  <p class="sub">Thống kê doanh thu theo ngày, tháng và món bán chạy.</p>
+  <div class="chips" id="range">
+    <button class="chip on" data-r="today">Hôm nay</button>
+    <button class="chip" data-r="7d">7 ngày</button>
+    <button class="chip" data-r="month">Tháng này</button>
+  </div>
+  <div class="stats">
+    <div class="stat"><small>Doanh thu</small><b>—</b></div>
+    <div class="stat"><small>Số đơn</small><b>—</b></div>
+    <div class="stat"><small>Giá trị đơn trung bình</small><b>—</b></div>
+  </div>
+  <div class="shell">
+    <b>Chưa có dữ liệu doanh thu</b><br>Biểu đồ doanh thu và danh sách món bán chạy sẽ hiện khi có dữ liệu đơn hàng.
+  </div>
+</div>
+<script>
+QO.header('merchant');
+(async () => { await QO.requireOwner(); })();
+document.getElementById('range').onclick = e => {
+  const b = e.target.closest('[data-r]'); if (!b) return;
+  document.querySelectorAll('#range .chip').forEach(x => x.classList.toggle('on', x === b));
+};
+</script></body></html>

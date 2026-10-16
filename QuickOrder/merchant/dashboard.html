@@ -1,0 +1,39 @@
+<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tổng quan - QuickOrder</title><link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="../css/style.css"><script src="../js/app.js"></script></head><body>
+<div class="wrap">
+  <h1>Tổng quan</h1>
+  <p class="sub">Tình hình quán và những việc cần làm.</p>
+  <div id="body"><div class="empty"><b>Đang tải...</b></div></div>
+</div>
+<script>
+QO.header('merchant');
+(async () => {
+  await QO.requireOwner();
+  const body = document.getElementById('body');
+  const shop = await QO.myShop();
+  if (!shop) { body.innerHTML = '<div class="empty"><b>Bạn chưa tạo quán</b><a class="btn" href="shop.html">Tạo quán</a></div>'; return; }
+
+  const [dishes, tables] = await Promise.all([QO.by('dishes', 'shop_id', shop.id), QO.by('tables', 'shop_id', shop.id)]);
+  const live = dishes.filter(d => !d.is_deleted), onSale = live.filter(d => d.is_available).length;
+  const [label, tone] = QO.STATUS[shop.status];
+  const note = shop.status === 'APPROVED' ? '' : `<div class="shell" style="margin-bottom:20px"><b>Quán chưa mở cho khách</b><br>${shop.status === 'PENDING' ? 'Đang chờ quản trị viên duyệt.' : 'Ghi chú từ quản trị: ' + QO.esc(shop.status_note)}</div>`;
+
+  body.innerHTML = `${note}
+    <div class="stats">
+      <div class="stat"><small>Trạng thái quán</small><span class="tag ${tone}">${label}</span></div>
+      <div class="stat"><small>Món trong menu</small><b>${live.length}</b></div>
+      <div class="stat"><small>Đang bán</small><b>${onSale}</b></div>
+      <div class="stat"><small>Đã báo hết</small><b>${live.length - onSale}</b></div>
+      <div class="stat"><small>Số bàn</small><b>${tables.length}</b></div>
+    </div>
+    <h2>Đơn hàng hôm nay</h2>
+    <div class="shell">Chưa có dữ liệu đơn hàng. Số đơn, tổng tiền và đơn mới sẽ hiện ở đây khi có chức năng đơn hàng.</div>
+    <h2 style="margin-top:24px">Truy cập nhanh</h2>
+    <div class="grid">
+      <a class="card shop" href="orders.html"><h3>Đơn hàng</h3><div class="meta">Nhận và cập nhật trạng thái đơn</div></a>
+      <a class="card shop" href="menu.html"><h3>Thực đơn</h3><div class="meta">Thêm món, giá, nhóm tùy chọn</div></a>
+      <a class="card shop" href="tables.html"><h3>Bàn và mã QR</h3><div class="meta">Tạo bàn và sao chép liên kết QR</div></a>
+      <a class="card shop" href="revenue.html"><h3>Doanh thu</h3><div class="meta">Thống kê theo ngày và tháng</div></a>
+      <a class="card shop" href="shop.html"><h3>Hồ sơ quán</h3><div class="meta">Tên, địa chỉ, giờ mở cửa</div></a>
+    </div>`;
+})();
+</script></body></html>

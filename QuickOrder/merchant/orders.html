@@ -1,0 +1,16 @@
+<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Đơn hàng - QuickOrder</title><link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="../css/style.css"><script src="../js/app.js"></script></head><body>
+<div class="wrap">
+  <h1>Đơn hàng</h1>
+  <p class="sub">Nhận đơn, xác nhận và cập nhật trạng thái cho khách.</p>
+  <div class="chips" aria-label="Lọc theo trạng thái">
+    <span class="chip on">Tất cả</span><span class="chip">Chờ xác nhận</span><span class="chip">Đang làm</span><span class="chip">Đang giao</span><span class="chip">Hoàn thành</span>
+  </div>
+  <div class="empty"><b>Chưa có đơn hàng</b>Đơn mới sẽ hiện ở đây. Chức năng đơn hàng đang được phát triển.</div>
+  <div class="shell" style="margin-top:16px">
+    <b>Luồng xử lý đơn</b><br>Chờ xác nhận → Đang làm → Đang giao → Hoàn thành. Có thể từ chối đơn khi hết món hoặc quán tạm đóng.
+  </div>
+</div>
+<script>
+QO.header('merchant');
+(async () => { await QO.requireOwner(); })();
+</script></body></html>

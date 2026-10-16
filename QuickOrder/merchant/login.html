@@ -7,7 +7,8 @@
   <label class="field"><span>Mật khẩu</span><input name="password" type="password" minlength="6" required></label>
   <div class="err" id="er"></div><button class="btn" style="width:100%" id="go">Đăng nhập</button></form></div>
 <script>
-QO.header('merchant'); if (QO.me()) location.replace('shop.html');
+QO.header('merchant');
+QO.session().then(u => { if (u && u.role === 'owner') location.replace('dashboard.html'); });
 let isReg = false; const f = document.getElementById('f'), reg = document.getElementById('reg');
 const mode = r => { isReg = r; reg.style.display = r ? '' : 'none'; reg.querySelectorAll('input').forEach(i => i.required = r);
   tl.classList.toggle('on', !r); tr.classList.toggle('on', r); go.textContent = r ? 'Tạo tài khoản' : 'Đăng nhập'; er.textContent = ''; };
@@ -17,8 +18,7 @@ f.onsubmit = async e => { e.preventDefault(); const v = Object.fromEntries(new F
     const u = isReg
       ? await QO.api('POST', 'register', {full_name: v.full_name.trim(), email, phone: v.phone.trim(), password: v.password})
       : await QO.api('POST', 'login', {email, password: v.password});
-    QO.login(u.id); location.href = 'shop.html';
+    if (u.role !== 'owner') { await QO.api('POST', 'logout').catch(() => {}); throw new Error('Tài khoản này không phải tài khoản chủ quán.'); }
+    location.href = 'dashboard.html';
   } catch (x) { er.textContent = x.name === 'ConstraintError' ? 'Email này đã được đăng ký.' : (x.message || 'Không lưu được dữ liệu.'); } };
 </script></body></html>
-
-

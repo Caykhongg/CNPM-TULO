@@ -55,4 +55,14 @@ dialog::backdrop{background:#14213d88}
 #toast{position:fixed;bottom:24px;left:50%;transform:translate(-50%,30px);background:var(--ink);color:#fff;padding:10px 20px;border-radius:99px;opacity:0;transition:.25s;z-index:99;pointer-events:none}
 #toast.show{opacity:1;transform:translate(-50%,0)}
 .link{font-size:12px;word-break:break-all;color:var(--muted)}
+.stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px;margin-bottom:24px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+.stat small{display:block;color:var(--muted);font-size:13px;margin-bottom:6px}
+.stat b{font-size:24px;letter-spacing:-.3px}
+.shell{border:2px dashed var(--line);border-radius:var(--r);background:#fff;padding:20px;color:var(--muted)}
+.shell b{color:var(--ink)}
+.kv{display:grid;grid-template-columns:1fr auto;gap:6px 14px;font-size:14px}
+.kv span{color:var(--muted)}
+.cart-grid{display:grid;grid-template-columns:1fr 340px;gap:20px;align-items:start}
+@media(max-width:820px){.cart-grid{grid-template-columns:1fr}}
 @media(max-width:820px){.split,.two{grid-template-columns:1fr}.topbar .in{flex-wrap:wrap;gap:8px}.nav{margin-left:0;width:100%}}

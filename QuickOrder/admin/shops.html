@@ -1,0 +1,80 @@
+<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Duyệt quán - QuickOrder Admin</title><link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="../css/style.css"><script src="../js/app.js"></script></head><body>
+<div class="wrap">
+  <h1>Duyệt quán</h1>
+  <p class="sub" id="sub">Đang kiểm tra đăng nhập...</p>
+  <form class="card" id="lf" hidden style="max-width:420px">
+    <label class="field"><span>Email quản trị</span><input name="email" type="email" required autocomplete="username"></label>
+    <label class="field"><span>Mật khẩu</span><input name="password" type="password" required autocomplete="current-password"></label>
+    <div class="err" id="er"></div><button class="btn" style="width:100%">Đăng nhập</button>
+  </form>
+  <div id="app" hidden>
+    <div class="stats" id="stats"></div>
+    <div class="chips" id="flt" aria-label="Lọc theo trạng thái"></div>
+    <div class="list" id="ls"></div>
+  </div>
+</div>
+<script>
+document.body.insertAdjacentHTML('afterbegin', '<header class="topbar"><div class="in"><span class="logo">Quick<b>Order</b> Admin</span><nav class="nav"><button id="out" hidden>Đăng xuất</button></nav></div></header>');
+
+const FILTERS = [['ALL', 'Tất cả'], ['PENDING', 'Chờ duyệt'], ['APPROVED', 'Đã duyệt'], ['REJECTED', 'Bị từ chối'], ['LOCKED', 'Bị khóa']];
+const $ = id => document.getElementById(id);
+let shops = [], filter = 'ALL';
+
+const countOf = s => s === 'ALL' ? shops.length : shops.filter(x => x.status === s).length;
+
+const actions = s => {
+  if (s.status === 'PENDING') return `<button class="btn sm" data-a="approve" data-id="${s.id}">Duyệt</button><button class="btn bad sm" data-a="reject" data-id="${s.id}">Từ chối</button>`;
+  if (s.status === 'APPROVED') return `<button class="btn bad sm" data-a="lock" data-id="${s.id}">Khóa</button>`;
+  if (s.status === 'LOCKED') return `<button class="btn sm" data-a="unlock" data-id="${s.id}">Mở khóa</button>`;
+  return '';
+};
+
+const draw = () => {
+  $('stats').innerHTML = FILTERS.slice(1).map(([v, t]) => `<div class="stat"><small>${t}</small><b>${countOf(v)}</b></div>`).join('');
+  $('flt').innerHTML = FILTERS.map(([v, t]) => `<button class="chip${filter === v ? ' on' : ''}" data-f="${v}">${t} (${countOf(v)})</button>`).join('');
+  const list = filter === 'ALL' ? shops : shops.filter(s => s.status === filter);
+  $('ls').innerHTML = list.length ? list.map(s => {
+    const [t, c] = QO.STATUS[s.status];
+    return `<div class="item">
+      <div><h3>${QO.esc(s.name)} <span class="tag ${c}">${t}</span></h3>
+      <div class="meta">${QO.esc(s.address)} · ${QO.esc(s.phone)}${s.status_note ? ' · Ghi chú: ' + QO.esc(s.status_note) : ''}</div></div>
+      <div class="acts">${actions(s)}</div>
+    </div>`;
+  }).join('') : '<div class="empty"><b>Không có quán nào</b>Thử chọn bộ lọc khác.</div>';
+};
+
+const showLogin = (msg = '') => { $('lf').hidden = false; $('app').hidden = true; $('out').hidden = true; $('er').textContent = msg;
+  $('sub').textContent = 'Đăng nhập bằng tài khoản quản trị để duyệt quán.'; };
+const showApp = () => { $('lf').hidden = true; $('app').hidden = false; $('out').hidden = false; $('er').textContent = '';
+  $('sub').textContent = 'Duyệt, từ chối hoặc khóa quán.'; };
+const load = async () => { shops = await QO.all('shops'); draw(); };
+
+$('lf').onsubmit = async e => { e.preventDefault(); const v = Object.fromEntries(new FormData($('lf')));
+  try {
+    const u = await QO.api('POST', 'login', {email: v.email.trim().toLowerCase(), password: v.password});
+    if (u.role !== 'admin') { await QO.api('POST', 'logout').catch(() => {}); throw new Error('Tài khoản này không có quyền quản trị.'); }
+    showApp(); await load();
+  } catch (x) { $('er').textContent = x.message || 'Không đăng nhập được.'; } };
+
+$('out').onclick = async () => { await QO.api('POST', 'logout').catch(() => {}); shops = []; showLogin(); };
+
+$('flt').onclick = e => { const b = e.target.closest('[data-f]'); if (b) { filter = b.dataset.f; draw(); } };
+
+$('ls').onclick = async e => {
+  const b = e.target.closest('[data-a]'); if (!b) return;
+  try {
+    const s = await QO.get('shops', b.dataset.id), a = b.dataset.a;
+    if (!s) return;
+    if (a === 'approve' || a === 'unlock') { s.status = 'APPROVED'; s.status_note = ''; }
+    else { const r = prompt('Lý do:'); if (r === null) return; s.status = a === 'reject' ? 'REJECTED' : 'LOCKED'; s.status_note = r; }
+    await QO.put('shops', s);
+    await load();
+  } catch (x) { QO.toast(x.message || 'Có lỗi xảy ra.'); }
+};
+
+(async () => {
+  const u = await QO.session();
+  if (u && u.role === 'admin') { showApp(); try { await load(); } catch (x) { showLogin(x.message); } }
+  else showLogin();
+})();
+</script></body></html>
