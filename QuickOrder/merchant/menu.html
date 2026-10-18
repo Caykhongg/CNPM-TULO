@@ -5,7 +5,7 @@ QO.header('merchant');
 (async () => { await QO.requireOwner(); const shop = await QO.myShop(), root = document.getElementById('root');
   if (!shop) { root.innerHTML = '<div class="empty"><b>Bạn chưa tạo quán</b><a class="btn" href="shop.html">Tạo quán</a></div>'; return; }
   root.innerHTML = '<div class="split"><div><form class="card" id="cf" style="margin-bottom:16px"><h2>Danh mục</h2><div class="mini"><input name="name" placeholder="VD: Món chính" required><button class="btn sm">Thêm</button></div><div class="chips" id="cl" style="margin:12px 0 0"></div></form>'
-    + '<form class="card" id="df"><h2 id="dt">Thêm món</h2><input type="hidden" name="id"><label class="field"><span>Tên món</span><input name="name" required></label><div class="two"><label class="field"><span>Giá (VND)</span><input name="price" type="number" min="0" step="500" required></label><label class="field"><span>Danh mục</span><select name="category_id" required></select></label></div><label class="check"><input type="checkbox" name="is_available" checked> Còn món</label><div class="err" id="er"></div><div class="row"><button type="button" class="btn ghost" id="rs">Hủy sửa</button><button class="btn">Lưu món</button></div></form></div><div class="list" id="ls"></div></div>';
+    + '<form class="card" id="df"><h2 id="dt">Thêm món</h2><input type="hidden" name="id"><label class="field"><span>Tên món</span><input name="name" required></label><div class="two"><label class="field"><span>Giá (VND)</span><input name="price" type="number" min="1" step="500" required></label><label class="field"><span>Danh mục</span><select name="category_id" required></select></label></div><label class="check"><input type="checkbox" name="is_available" checked> Còn món</label><div class="err" id="er"></div><div class="row"><button type="button" class="btn ghost" id="rs">Hủy sửa</button><button class="btn">Lưu món</button></div></form></div><div class="list" id="ls"></div></div>';
   let cats, dishes, groups, opts;
   const load = async () => { cats = await QO.all('categories'); dishes = (await QO.by('dishes', 'shop_id', shop.id)).filter(d => !d.is_deleted); const ids = new Set(dishes.map(d => d.id));
     groups = (await QO.all('optionGroups')).filter(g => ids.has(g.dish_id)); const gi = new Set(groups.map(g => g.id)); opts = (await QO.all('options')).filter(o => gi.has(o.group_id)); draw(); };
@@ -18,7 +18,8 @@ QO.header('merchant');
   cf.onsubmit = async e => { e.preventDefault(); try { await QO.put('categories', {name: cf.name.value.trim()}); cf.reset(); load(); } catch { QO.toast('Danh mục đã tồn tại'); } };
   df.onsubmit = async e => { e.preventDefault(); if (!df.category_id.value) { er.textContent = 'Cần có danh mục trước.'; return; } er.textContent = '';
     const old = df.id.value ? dishes.find(d => d.id === Number(df.id.value)) : {shop_id: shop.id, is_deleted: false};
-    await QO.put('dishes', {...old, name: df.name.value.trim(), price: Number(df.price.value), category_id: Number(df.category_id.value), is_available: df.is_available.checked});
+    try { await QO.put('dishes', {...old, name: df.name.value.trim(), price: Number(df.price.value), category_id: Number(df.category_id.value), is_available: df.is_available.checked}); }
+    catch (x) { er.textContent = x.message; return; }
     reset(); load(); QO.toast('Đã lưu món'); };
   const reset = () => { df.reset(); df.id.value = ''; dt.textContent = 'Thêm món'; }; rs.onclick = reset;
   root.onclick = async e => { const b = e.target.closest('[data-ed],[data-av],[data-rm],[data-xc],[data-xg],[data-xo]'); if (!b) return; e.preventDefault(); const D = b.dataset;

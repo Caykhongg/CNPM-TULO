@@ -19,9 +19,9 @@ with open(os.path.join(BASE, "schema.sql"), "r", encoding="utf-8") as f:
 email = os.environ.get("ADMIN_EMAIL", "").strip().lower()
 pw = os.environ.get("ADMIN_PASSWORD", "")
 if email and pw:
-    if len(pw) < 6:
+    if len(pw) < 8:                    # NFR-10
         conn.close()
-        sys.exit("ADMIN_PASSWORD phải có ít nhất 6 ký tự.")
+        sys.exit("ADMIN_PASSWORD phải có ít nhất 8 ký tự.")
     if conn.execute("SELECT 1 FROM users WHERE email = ?", (email,)).fetchone():
         print("Email này đã có tài khoản, bỏ qua.")
     else:

@@ -1,6 +1,6 @@
 <!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Giỏ hàng - QuickOrder</title><link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="../css/style.css"><script src="../js/app.js"></script></head><body>
 <div class="wrap">
-  <a class="meta" href="home.html">← Tiếp tục chọn món</a>
+  <a class="meta" id="back" href="home.html">← Tiếp tục chọn món</a>
   <h1 style="margin-top:8px">Giỏ hàng</h1>
   <p class="sub" id="from"></p>
   <div class="cart-grid">
@@ -40,11 +40,13 @@ QO.header('customer');
 
   const draw = async () => {
     const c = QO.getCart();
+    const back = c.shop_id ? 'restaurant.html?id=' + c.shop_id + (c.table ? '&table=' + encodeURIComponent(c.table) : '') : 'home.html';
+    document.getElementById('back').href = back;
     shop = c.shop_id ? await QO.get('shops', c.shop_id) : null;
     from.textContent = shop ? 'Quán: ' + shop.name : '';
 
     if (!c.items.length) {
-      box.innerHTML = '<div class="empty"><b>Giỏ hàng trống</b><a class="btn" href="home.html">Chọn món</a></div>';
+      box.innerHTML = `<div class="empty"><b>Giỏ hàng trống</b><a class="btn" href="${back}">Chọn món</a></div>`;
       checkout.style.display = 'none';
       return;
     }
@@ -65,7 +67,7 @@ QO.header('customer');
     sum.innerHTML = `<div class="kv"><span>Số món</span><b>${count}</b></div>
       <div class="row" style="margin-top:12px"><b>Tổng cộng</b><span class="price" style="font-size:20px">${QO.money(total)}</span></div>`;
 
-    const modeList = c.table ? [['dine', 'Tại bàn']] : [['pickup', 'Tự đến lấy'], ['delivery', 'Giao tận nơi']];
+    const modeList = [['dine', 'Tại bàn']];   // SRS: chỉ phục vụ khách tại bàn, không mang đi hay giao hàng
     if (!modeList.some(([v]) => v === mode)) mode = modeList[0][0];
     modesEl.innerHTML = modeList.map(([v, t]) => `<button type="button" class="chip${mode === v ? ' on' : ''}" data-mode="${v}">${t}</button>`).join('');
     paysEl.innerHTML = [['cash', 'Tiền mặt'], ['transfer', 'Chuyển khoản / QR']]

@@ -21,7 +21,6 @@ const QO = (() => {
   const isAccepting = s => s.status === 'APPROVED' && isOpenNow(s);              // Shop.is_accepting_orders
   const isOrderable = d => d.is_available && !d.is_deleted;                      // Dish.is_orderable
   const validateSelection = (g, opts) => !(g.is_required && !opts.length) && !(!g.is_multiple && opts.length > 1); // OptionGroup.validate_selection
-  const newToken = () => (crypto.randomUUID ? crypto.randomUUID().replace(/-/g,'') : Math.random().toString(36).slice(2) + Date.now().toString(36));
   const qrUrl = t => new URL('../customer/restaurant.html?id=' + t.shop_id + '&table=' + t.qr_token, location.href).href; // DiningTable.qr_url
   const STATUS = {PENDING:['Chờ duyệt','wait'], APPROVED:['Đã duyệt','ok'], REJECTED:['Bị từ chối','no'], LOCKED:['Bị khóa','no']};
 
@@ -36,26 +35,76 @@ const QO = (() => {
     t.textContent = m; t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 2200); };
   const param = k => new URLSearchParams(location.search).get(k);
 
+  // Đường dẫn: các trang nằm trong thư mục customer/, merchant/, admin/ phải lùi một cấp để về trang chủ
+  const inSub = () => /\/(customer|merchant|admin)\//.test(location.pathname);
+  const rootUrl = () => inSub() ? '../' : '';
+  const homeUrl = () => rootUrl() + 'index.html';
+
   // Phiên đăng nhập nằm trên server (cookie HttpOnly). Trình duyệt không lưu và không tự quyết quyền truy cập.
   const session = async () => { try { return await api('GET', 'me'); } catch { return null; } };
-  const logout = async () => { try { await api('POST', 'logout'); } catch {} location.href = 'login.html'; };
+  const logout = async () => { try { await api('POST', 'logout'); } catch {} location.href = homeUrl(); };
   const requireOwner = async () => { const u = await session();
     if (!u || u.role !== 'owner') { location.replace('login.html'); throw 0; } return u; };
   const myShop = async () => { const u = await session();
     return u && u.role === 'owner' ? (await by('shops', 'owner_id', u.id))[0] : undefined; };
 
-  // Giỏ hàng (lớp phiên, lưu localStorage)
-  const getCart = () => { try { return JSON.parse(localStorage.getItem('qo_cart')) || {shop_id:null, table:null, items:[]}; } catch { return {shop_id:null, table:null, items:[]}; } };
-  const setCart = c => { localStorage.setItem('qo_cart', JSON.stringify(c)); badge(); };
+  // Giỏ hàng: lưu trong phiên của tab (sessionStorage), gắn với bàn; đóng tab là mất giỏ (SRS mục 1.4)
+  const getCart = () => { try { return JSON.parse(sessionStorage.getItem('qo_cart')) || {shop_id:null, table:null, items:[]}; } catch { return {shop_id:null, table:null, items:[]}; } };
+  const setCart = c => { sessionStorage.setItem('qo_cart', JSON.stringify(c)); badge(); };
   const badge = () => { const n = getCart().items.reduce((s, i) => s + i.qty, 0), b = document.getElementById('cart-n'); if (b) b.textContent = n || ''; if (b) b.style.display = n ? '' : 'none'; };
 
-  // Menu. Trang chủ quán hiện menu cho mọi người; trang đăng nhập không có menu.
-  const header = kind => { const file = location.pathname.split('/').pop(); const a = f => f === file ? ' class="on"' : '';
-    const nav = kind === 'merchant'
-      ? (file === 'login.html' ? '' : `<a href="dashboard.html"${a('dashboard.html')}>Tổng quan</a><a href="orders.html"${a('orders.html')}>Đơn hàng</a><a href="menu.html"${a('menu.html')}>Thực đơn</a><a href="tables.html"${a('tables.html')}>Bàn &amp; QR</a><a href="revenue.html"${a('revenue.html')}>Doanh thu</a><a href="shop.html"${a('shop.html')}>Hồ sơ quán</a><button onclick="QO.logout()">Đăng xuất</button>`)
-      : `<a href="home.html"${a('home.html')}>Khám phá</a><a href="orders.html"${a('orders.html')}>Đơn hàng</a><a href="cart.html"${a('cart.html')}>Giỏ hàng<span class="badge-n" id="cart-n"></span></a><a href="profile.html"${a('profile.html')}>Hồ sơ</a><a href="../merchant/login.html">Dành cho chủ quán</a>`;
-    document.body.insertAdjacentHTML('afterbegin', `<header class="topbar"><div class="in"><a class="logo" href="${kind==='merchant'?'dashboard.html':'home.html'}">Quick<b>Order</b></a><nav class="nav">${nav}</nav></div></header>`); badge(); };
+  // ===== Thanh công cụ chung =====
+  // Hai khu vực của sản phẩm: "Người dùng" (khách gọi món) và "Chủ quán".
+  // Mục quản lý của chủ quán chỉ hiện khi phiên đăng nhập là chủ quán.
+  const SECTIONS = {
+    customer: [['customer/home.html', 'Gọi món tại bàn'], ['customer/cart.html', 'Giỏ hàng'], ['customer/orders.html', 'Đơn hàng'], ['customer/profile.html', 'Hồ sơ']],
+    merchant: [['merchant/dashboard.html', 'Tổng quan'], ['merchant/orders.html', 'Đơn hàng'], ['merchant/menu.html', 'Thực đơn'], ['merchant/tables.html', 'Bàn & QR'], ['merchant/revenue.html', 'Doanh thu'], ['merchant/shop.html', 'Hồ sơ quán']]
+  };
+  const linkTo = ([p, t]) => `<a href="${rootUrl()}${p}"${location.pathname.endsWith('/' + p) ? ' class="on" aria-current="page"' : ''}>${t}${p === 'customer/cart.html' ? '<span class="badge-n" id="cart-n"></span>' : ''}</a>`;
+  const guestLinks = () => `<a href="${rootUrl()}merchant/login.html">Đăng nhập</a><a href="${rootUrl()}merchant/login.html?mode=register">Đăng ký tài khoản</a>`;
+  const closeMenus = () => document.querySelectorAll('.dd.open').forEach(d => { d.classList.remove('open'); d.querySelector('.dd-btn').setAttribute('aria-expanded', 'false'); });
 
-  return {api, all, get, by, put, del, isOpenNow, isAccepting, isOrderable, validateSelection, newToken, qrUrl, STATUS,
+  // Cập nhật khu vực tài khoản và mục chủ quán theo phiên đăng nhập hiện tại
+  const refreshAccount = async () => {
+    const u = await session(), owner = !!u && u.role === 'owner';
+    const acct = document.getElementById('acct'), links = document.getElementById('mer-links'), desc = document.getElementById('mer-desc');
+    if (!acct || !links) return;
+    acct.hidden = !u;
+    if (u) document.getElementById('who').textContent = u.full_name || u.email;
+    desc.textContent = owner ? 'Quản lý quán, thực đơn và bàn.' : 'Đăng nhập để quản lý quán của bạn.';
+    links.innerHTML = owner ? SECTIONS.merchant.map(linkTo).join('') : guestLinks();
+  };
+
+  const header = () => {
+    const here = location.pathname;
+    const sec = /\/merchant\//.test(here) ? 'merchant' : /\/customer\//.test(here) ? 'customer' : 'home';
+    document.body.insertAdjacentHTML('afterbegin', `<header class="topbar"><div class="in">
+      <a class="logo" href="${homeUrl()}">Quick<b>Order</b></a>
+      <nav class="switch" aria-label="Chọn khu vực">
+        <div class="dd">
+          <button class="dd-btn${sec === 'customer' ? ' on' : ''}" type="button" aria-expanded="false">Người dùng</button>
+          <div class="dd-panel"><div class="dd-box"><p class="dd-desc">Khách gọi món bằng mã QR trên bàn.</p><div class="dd-links">${SECTIONS.customer.map(linkTo).join('')}</div></div></div>
+        </div>
+        <div class="dd">
+          <button class="dd-btn${sec === 'merchant' ? ' on' : ''}" type="button" aria-expanded="false">Chủ quán</button>
+          <div class="dd-panel"><div class="dd-box"><p class="dd-desc" id="mer-desc">Đăng nhập để quản lý quán của bạn.</p><div class="dd-links" id="mer-links">${guestLinks()}</div></div></div>
+        </div>
+      </nav>
+      <div class="acct" id="acct" hidden><span id="who"></span><button type="button" id="logout">Đăng xuất</button></div>
+    </div></header>`);
+
+    const bar = document.querySelector('.topbar');
+    bar.addEventListener('click', e => {
+      const btn = e.target.closest('.dd-btn');
+      if (btn) { const d = btn.parentElement, open = !d.classList.contains('open'); closeMenus(); d.classList.toggle('open', open); btn.setAttribute('aria-expanded', String(open)); }
+      if (e.target.closest('#logout')) logout();
+    });
+    document.addEventListener('click', e => { if (!e.target.closest('.dd')) closeMenus(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMenus(); });
+    badge();
+    refreshAccount();
+  };
+
+  return {api, all, get, by, put, del, isOpenNow, isAccepting, isOrderable, validateSelection, qrUrl, STATUS,
     esc, money, norm, hash, toast, param, session, logout, requireOwner, myShop, getCart, setCart, header};
 })();

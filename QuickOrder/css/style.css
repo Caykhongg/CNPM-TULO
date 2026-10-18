@@ -27,7 +27,7 @@ h1{font-size:26px;letter-spacing:-.4px}h2{font-size:18px;margin-bottom:12px}
 .chip.on{background:var(--pri);border-color:var(--pri);color:#fff}
 .tag{display:inline-block;font-size:12px;font-weight:600;padding:2px 10px;border-radius:99px}
 .tag.ok{background:var(--pri-s);color:var(--pri-d)}.tag.no{background:var(--bad-s);color:var(--bad)}.tag.wait{background:var(--acc-s);color:#946200}
-.btn{font:inherit;font-weight:600;border:0;border-radius:10px;padding:9px 16px;cursor:pointer;background:var(--pri);color:#fff}
+.btn{display:inline-block;font:inherit;font-weight:600;border:0;border-radius:10px;padding:9px 16px;cursor:pointer;background:var(--pri);color:#fff}
 .btn:hover{background:var(--pri-d)}.btn:disabled{background:#cdd3cf;cursor:not-allowed}
 .btn.ghost{background:#fff;color:var(--ink);border:1px solid var(--line)}.btn.ghost:hover{background:var(--bg)}
 .btn.warn{background:var(--acc-s);color:#946200}.btn.bad{background:var(--bad-s);color:var(--bad)}.btn.sm{padding:5px 11px;font-size:13px}
@@ -66,3 +66,48 @@ dialog::backdrop{background:#14213d88}
 .cart-grid{display:grid;grid-template-columns:1fr 340px;gap:20px;align-items:start}
 @media(max-width:820px){.cart-grid{grid-template-columns:1fr}}
 @media(max-width:820px){.split,.two{grid-template-columns:1fr}.topbar .in{flex-wrap:wrap;gap:8px}.nav{margin-left:0;width:100%}}
+
+/* ===== Thanh công cụ chung: Người dùng / Chủ quán ===== */
+.switch{display:flex;gap:6px;margin-left:auto}
+.dd{position:relative}
+.dd-btn{font:inherit;font-weight:600;font-size:14px;color:#dfe5f1;background:#243360;border:0;border-radius:99px;padding:8px 16px;cursor:pointer;display:inline-flex;align-items:center;gap:9px;white-space:nowrap}
+.dd-btn::after{content:"";width:6px;height:6px;border:solid currentColor;border-width:0 2px 2px 0;transform:translateY(-2px) rotate(45deg);transition:transform .15s}
+.dd-btn:hover{background:#2f3f6e;color:#fff}
+.dd-btn.on{background:var(--acc);color:var(--ink)}
+.dd.open .dd-btn::after{transform:translateY(2px) rotate(-135deg)}
+.dd-panel{display:none;position:absolute;top:100%;right:0;min-width:250px;padding-top:10px;z-index:30}
+.dd.open .dd-panel{display:block}
+.dd-box{background:#fff;color:var(--ink);border:1px solid var(--line);border-radius:14px;padding:8px;box-shadow:0 18px 40px #14213d33;animation:ddIn .14s ease-out}
+.dd-desc{font-size:13px;color:var(--muted);padding:8px 10px 6px}
+.dd-links{display:flex;flex-direction:column}
+.dd-links a{padding:10px 12px;border-radius:10px;font-weight:500;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.dd-links a:hover{background:var(--bg)}
+.dd-links a.on{background:var(--acc-s);color:#7a4d00;font-weight:700}
+.dd-links .badge-n{margin-left:0}
+.acct{display:flex;align-items:center;gap:10px;font-size:14px;margin-left:8px}
+.acct[hidden]{display:none}
+.acct span{color:#cfd6e6;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.acct button{font:inherit;font-size:13px;color:#fff;background:none;border:1px solid #3a4a75;border-radius:99px;padding:6px 12px;cursor:pointer}
+.acct button:hover{background:#26335a}
+.dd-btn:focus-visible,.dd-links a:focus-visible,.acct button:focus-visible,.logo:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+@keyframes ddIn{from{opacity:0;transform:translateY(-4px)}}
+@media(hover:hover){.dd:hover .dd-panel{display:block}}
+@media(max-width:820px){
+  .topbar .in{flex-wrap:wrap;gap:10px 12px;padding:10px 16px}
+  .switch{order:3;width:100%;margin-left:0}
+  .switch .dd{flex:1}
+  .switch .dd-btn{width:100%;justify-content:center}
+  .dd{position:static}
+  .dd-panel{left:12px;right:12px;min-width:0}
+  .acct{margin-left:auto}
+  .choose{grid-template-columns:1fr}
+}
+@media(prefers-reduced-motion:reduce){.dd-box{animation:none}.dd-btn::after{transition:none}}
+
+/* ===== Trang chủ: chọn khu vực ===== */
+.choose{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:0 0 32px}
+.choose .card{border-left:6px solid var(--pri);padding:22px}
+.choose .card.mer{border-left-color:var(--acc)}
+.choose h2{font-size:20px;margin-bottom:6px}
+.choose p{color:var(--muted);margin-bottom:16px}
+@media(max-width:820px){.choose{grid-template-columns:1fr}}

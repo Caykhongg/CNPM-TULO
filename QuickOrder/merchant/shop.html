@@ -11,7 +11,7 @@
 QO.header('merchant');
 (async () => { const u = await QO.requireOwner(); let shop = await QO.myShop(); const f = document.getElementById('f');
   const show = () => { if (!shop) return; for (const k of ['name','address','phone','open_time','close_time','bank_account_number','payment_qr_image']) f.elements[k].value = shop[k] || '';
-    const [t, c] = QO.STATUS[shop.status]; st.innerHTML = '<span class="tag ' + c + '">' + t + '</span>'; note.textContent = shop.status_note ? 'Ghi chú từ quản trị: ' + shop.status_note : (shop.status === 'PENDING' ? 'Quán đang chờ quản trị viên duyệt.' : ''); };
+    const [t, c] = QO.STATUS[shop.status]; st.innerHTML = '<span class="tag ' + c + '">' + t + '</span>'; note.textContent = (shop.status_note ? 'Ghi chú từ quản trị: ' + shop.status_note + ' ' : '') + (shop.status === 'PENDING' ? 'Quán đang chờ quản trị viên duyệt.' : '') + (shop.status === 'REJECTED' ? 'Sửa thông tin rồi bấm Lưu để gửi lại.' : ''); };
   show();
   f.onsubmit = async e => { e.preventDefault(); const v = Object.fromEntries(new FormData(f));
     shop = await QO.put('shops', {...(shop || {owner_id: u.id, status: 'PENDING', status_note: ''}), ...v, name: v.name.trim(), address: v.address.trim()}); show(); QO.toast('Đã lưu thông tin quán'); }; })();

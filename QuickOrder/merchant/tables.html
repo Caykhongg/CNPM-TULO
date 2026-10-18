@@ -9,10 +9,10 @@ QO.header('merchant');
     ls.innerHTML = ts.length ? ts.map(t => '<div class="item"><div><h3>Bàn ' + QO.esc(t.table_number) + '</h3><div class="link">' + QO.esc(QO.qrUrl(t)) + '</div></div><div class="acts"><button class="btn ghost sm" data-cp="' + t.id + '">Sao chép</button><button class="btn warn sm" data-rg="' + t.id + '">Đổi mã</button><button class="btn bad sm" data-rm="' + t.id + '">Xóa</button></div></div>').join('') : '<div class="empty"><b>Chưa có bàn nào</b>Thêm bàn đầu tiên ở bên trái.</div>'; };
   f.onsubmit = async e => { e.preventDefault(); const n = f.table_number.value.trim(), ts = await QO.by('tables', 'shop_id', shop.id);
     if (ts.some(t => t.table_number.toLowerCase() === n.toLowerCase())) { er.textContent = 'Tên bàn đã tồn tại trong quán.'; return; }
-    er.textContent = ''; await QO.put('tables', {shop_id: shop.id, table_number: n, qr_token: QO.newToken()}); f.reset(); draw(); };
+    er.textContent = ''; await QO.put('tables', {shop_id: shop.id, table_number: n}); f.reset(); draw(); };
   ls.onclick = async e => { const b = e.target.closest('button'); if (!b) return; const id = b.dataset.cp || b.dataset.rg || b.dataset.rm, t = await QO.get('tables', id);
     if (b.dataset.cp) { navigator.clipboard && navigator.clipboard.writeText(QO.qrUrl(t)); QO.toast('Đã sao chép liên kết'); }
-    if (b.dataset.rg) { t.qr_token = QO.newToken(); await QO.put('tables', t); QO.toast('Đã tạo mã mới, mã cũ vô hiệu'); }
+    if (b.dataset.rg) { await QO.put('tables', {...t, regenerate: true}); QO.toast('Đã tạo mã mới, mã cũ vô hiệu'); }
     if (b.dataset.rm && confirm('Xóa bàn ' + t.table_number + '?')) await QO.del('tables', id); draw(); };
   draw(); })();
 </script></body></html>

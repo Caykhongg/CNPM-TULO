@@ -4,7 +4,7 @@
 <form class="card" id="f">
   <div id="reg"><label class="field"><span>Họ tên</span><input name="full_name"></label><label class="field"><span>Số điện thoại</span><input name="phone" type="tel"></label></div>
   <label class="field"><span>Email</span><input name="email" type="email" required></label>
-  <label class="field"><span>Mật khẩu</span><input name="password" type="password" minlength="6" required></label>
+  <label class="field"><span>Mật khẩu</span><input name="password" type="password" minlength="8" required></label>
   <div class="err" id="er"></div><button class="btn" style="width:100%" id="go">Đăng nhập</button></form></div>
 <script>
 QO.header('merchant');
@@ -12,7 +12,7 @@ QO.session().then(u => { if (u && u.role === 'owner') location.replace('dashboar
 let isReg = false; const f = document.getElementById('f'), reg = document.getElementById('reg');
 const mode = r => { isReg = r; reg.style.display = r ? '' : 'none'; reg.querySelectorAll('input').forEach(i => i.required = r);
   tl.classList.toggle('on', !r); tr.classList.toggle('on', r); go.textContent = r ? 'Tạo tài khoản' : 'Đăng nhập'; er.textContent = ''; };
-tl.onclick = () => mode(false); tr.onclick = () => mode(true); mode(false);
+tl.onclick = () => mode(false); tr.onclick = () => mode(true); mode(QO.param('mode') === 'register');
 f.onsubmit = async e => { e.preventDefault(); const v = Object.fromEntries(new FormData(f)), email = v.email.trim().toLowerCase();
   try {
     const u = isReg
