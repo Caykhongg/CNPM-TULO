@@ -414,6 +414,162 @@ def qr_lookup(token):
                    shop={k: row[k] for k in ("id", "name", "address", "phone", "open_time", "close_time", "status")})
 
 
+# ---------- Đơn hàng ----------
+ORDER_STATUSES = ("PENDING", "CONFIRMED", "PREPARING", "COMPLETED", "CANCELLED")
+
+
+def order_json(c, order_id):
+    order = c.execute("SELECT * FROM orders WHERE id = ?", (order_id,)).fetchone()
+    if not order:
+        abort(404)
+    items = c.execute(
+        """SELECT oi.*, d.name AS dish_name
+           FROM order_items oi JOIN dishes d ON d.id = oi.dish_id
+           WHERE oi.order_id = ? ORDER BY oi.id""",
+        (order_id,),
+    ).fetchall()
+    result = out(order)
+    result["items"] = [out(item) for item in items]
+    return result
+
+
+@app.post("/api/orders")
+def create_order():
+    d = json_body()
+    try:
+        shop_id = int(d.get("shop_id"))
+        table_id = int(d.get("table_id")) if d.get("table_id") is not None else None
+    except (TypeError, ValueError):
+        return jsonify(error="shop_id và table_id không hợp lệ."), 400
+
+    items = d.get("items")
+    if not isinstance(items, list) or not items:
+        return jsonify(error="Đơn hàng phải có ít nhất một món."), 400
+    payment_method = str(d.get("payment_method") or "CASH").upper()
+    if payment_method not in ("CASH", "TRANSFER"):
+        return jsonify(error="payment_method phải là CASH hoặc TRANSFER."), 400
+
+    with db() as c:
+        shop = c.execute(
+            "SELECT id FROM shops WHERE id = ? AND status = 'APPROVED'", (shop_id,)
+        ).fetchone()
+        if not shop:
+            return jsonify(error="Quán không tồn tại hoặc chưa được duyệt."), 404
+        if table_id is not None:
+            table = c.execute(
+                "SELECT id FROM shop_tables WHERE id = ? AND shop_id = ?",
+                (table_id, shop_id),
+            ).fetchone()
+            if not table:
+                return jsonify(error="Bàn không thuộc quán này."), 400
+
+        normalized = []
+        total = 0
+        for item in items:
+            try:
+                dish_id = int(item.get("dish_id"))
+                quantity = int(item.get("quantity"))
+            except (AttributeError, TypeError, ValueError):
+                return jsonify(error="Món trong đơn không hợp lệ."), 400
+            if quantity <= 0:
+                return jsonify(error="Số lượng món phải lớn hơn 0."), 400
+            dish = c.execute(
+                """SELECT id, price FROM dishes
+                   WHERE id = ? AND shop_id = ? AND is_deleted = 0 AND is_available = 1""",
+                (dish_id, shop_id),
+            ).fetchone()
+            if not dish:
+                return jsonify(error=f"Món {dish_id} không tồn tại hoặc đã hết món."), 400
+            price = int(dish["price"])
+            total += price * quantity
+            normalized.append((dish_id, quantity, price, str(item.get("note") or "").strip()))
+
+        cur = c.execute(
+            """INSERT INTO orders
+               (shop_id, table_id, customer_name, payment_method, total_amount, note)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (shop_id, table_id, str(d.get("customer_name") or "Khách tại bàn").strip(),
+             payment_method, total, str(d.get("note") or "").strip()),
+        )
+        order_id = cur.lastrowid
+        c.executemany(
+            """INSERT INTO order_items(order_id, dish_id, quantity, unit_price, note)
+               VALUES (?, ?, ?, ?, ?)""",
+            [(order_id, dish_id, quantity, price, note)
+             for dish_id, quantity, price, note in normalized],
+        )
+        return jsonify(order_json(c, order_id)), 201
+
+
+@app.get("/api/orders/<int:id>")
+def get_order(id):
+    with db() as c:
+        return jsonify(order_json(c, id))
+
+
+@app.get("/api/orders")
+def list_orders():
+    u = login_required("owner", "admin")
+    status = request.args.get("status")
+    if status and status not in ORDER_STATUSES:
+        return jsonify(error="Trạng thái đơn không hợp lệ."), 400
+    where = []
+    args = []
+    if u["role"] == "owner":
+        where.append("o.shop_id IN (SELECT id FROM shops WHERE owner_id = ?)")
+        args.append(u["id"])
+    if request.args.get("shop_id"):
+        try:
+            where.append("o.shop_id = ?")
+            args.append(int(request.args["shop_id"]))
+        except ValueError:
+            return jsonify(error="shop_id không hợp lệ."), 400
+    if status:
+        where.append("o.status = ?")
+        args.append(status)
+    sql = "SELECT o.* FROM orders o" + (" WHERE " + " AND ".join(where) if where else "") + " ORDER BY o.id DESC"
+    with db() as c:
+        rows = c.execute(sql, args).fetchall()
+        return jsonify([order_json(c, row["id"]) for row in rows])
+
+
+@app.put("/api/orders/<int:id>/status")
+def update_order_status(id):
+    u = login_required("owner", "admin")
+    d = json_body()
+    status = str(d.get("status") or "").upper()
+    if status not in ORDER_STATUSES:
+        return jsonify(error="Trạng thái đơn không hợp lệ."), 400
+    with db() as c:
+        order = c.execute("SELECT * FROM orders WHERE id = ?", (id,)).fetchone()
+        if not order:
+            abort(404)
+        if u["role"] == "owner":
+            owns = c.execute(
+                "SELECT 1 FROM shops WHERE id = ? AND owner_id = ?",
+                (order["shop_id"], u["id"]),
+            ).fetchone()
+            if not owns:
+                abort(403)
+        if order["status"] in ("COMPLETED", "CANCELLED"):
+            return jsonify(error="Không thể sửa đơn đã kết thúc."), 409
+        c.execute("UPDATE orders SET status = ? WHERE id = ?", (status, id))
+        return jsonify(order_json(c, id))
+
+
+@app.put("/api/orders/<int:id>/cancel")
+def cancel_order(id):
+    d = json_body()
+    with db() as c:
+        order = c.execute("SELECT status FROM orders WHERE id = ?", (id,)).fetchone()
+        if not order:
+            abort(404)
+        if order["status"] != "PENDING":
+            return jsonify(error="Chỉ có thể hủy đơn đang chờ xác nhận."), 409
+        c.execute("UPDATE orders SET status = 'CANCELLED' WHERE id = ?", (id,))
+        return jsonify(order_json(c, id))
+
+
 # ---------- Trang tĩnh ----------
 @app.get("/")
 @app.get("/index.html")          # logo và các link "về trang chủ" trỏ tới index.html
