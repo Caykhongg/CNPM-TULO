@@ -88,3 +88,52 @@ CREATE INDEX IF NOT EXISTS idx_options_group ON options(group_id);
 
 INSERT OR IGNORE INTO categories (name) VALUES
     ('Cà phê'), ('Trà'), ('Trà sữa'), ('Đồ ăn'), ('Nước giải khát');
+
+
+CREATE TABLE IF NOT EXISTS orders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    shop_id INTEGER NOT NULL,
+    table_id INTEGER,
+    customer_name TEXT NOT NULL DEFAULT 'Khách tại bàn',
+    status TEXT NOT NULL DEFAULT 'PENDING'
+        CHECK (status IN (
+            'PENDING',
+            'CONFIRMED',
+            'PREPARING',
+            'COMPLETED',
+            'CANCELLED'
+        )),
+    payment_method TEXT NOT NULL DEFAULT 'CASH'
+        CHECK (payment_method IN ('CASH', 'TRANSFER')),
+    payment_status TEXT NOT NULL DEFAULT 'UNPAID'
+        CHECK (payment_status IN ('UNPAID', 'PAID')),
+    total_amount INTEGER NOT NULL DEFAULT 0 CHECK (total_amount >= 0),
+    note TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (shop_id) REFERENCES shops(id)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+    FOREIGN KEY (table_id) REFERENCES shop_tables(id)
+        ON UPDATE CASCADE ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS order_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id INTEGER NOT NULL,
+    dish_id INTEGER NOT NULL,
+    quantity INTEGER NOT NULL CHECK (quantity > 0),
+    unit_price INTEGER NOT NULL CHECK (unit_price >= 0),
+    note TEXT NOT NULL DEFAULT '',
+    FOREIGN KEY (order_id) REFERENCES orders(id)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+    FOREIGN KEY (dish_id) REFERENCES dishes(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT
+);
+
+CREATE INDEX IF NOT EXISTS idx_orders_shop
+    ON orders(shop_id);
+
+CREATE INDEX IF NOT EXISTS idx_orders_status
+    ON orders(status);
+
+CREATE INDEX IF NOT EXISTS idx_order_items_order
+    ON order_items(order_id);
