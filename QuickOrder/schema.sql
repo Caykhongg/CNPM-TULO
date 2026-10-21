@@ -137,3 +137,19 @@ CREATE INDEX IF NOT EXISTS idx_orders_status
 
 CREATE INDEX IF NOT EXISTS idx_order_items_order
     ON order_items(order_id);
+
+-- Đăng ký tài khoản khách đang chờ nhập mã xác nhận email.
+-- Chưa tạo dòng trong users cho đến khi nhập đúng mã, nên email chưa xác nhận không chiếm tài khoản.
+-- Chỉ lưu hash của mật khẩu và của mã 6 số.
+CREATE TABLE IF NOT EXISTS pending_signups (
+    email TEXT PRIMARY KEY COLLATE NOCASE,
+    full_name TEXT NOT NULL,
+    phone TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
+    code_hash TEXT NOT NULL,
+    expires_at INTEGER NOT NULL,          -- unix time: mã hết hạn lúc nào
+    tries INTEGER NOT NULL DEFAULT 0,     -- số lần nhập sai mã hiện tại
+    last_sent_at INTEGER NOT NULL,        -- lần gửi mã gần nhất
+    window_start INTEGER NOT NULL,        -- đầu cửa sổ 1 giờ đang đếm số lần gửi
+    sent_in_window INTEGER NOT NULL DEFAULT 0
+);

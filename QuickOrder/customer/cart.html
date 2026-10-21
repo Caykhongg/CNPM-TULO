@@ -86,6 +86,15 @@ QO.header('customer');
   modesEl.onclick = e => { const b = e.target.closest('[data-mode]'); if (b) { mode = b.dataset.mode; draw(); } };
   paysEl.onclick = e => { const b = e.target.closest('[data-pay]'); if (b) { method = b.dataset.pay; draw(); } };
 
+  // Điền sẵn tên và số điện thoại từ tài khoản hoặc hồ sơ tạm (chỉ điền khi ô đang trống)
+  const who = await QO.session();
+  const profile = who && who.role === 'customer' ? who : QO.getGuest();
+  if (profile) {
+    const nameEl = document.querySelector('input[name="name"]'), phoneEl = document.querySelector('input[name="phone"]');
+    if (nameEl && !nameEl.value) nameEl.value = profile.full_name || '';
+    if (phoneEl && !phoneEl.value) phoneEl.value = profile.phone || '';
+  }
+
   draw();
 })();
 </script></body></html>
