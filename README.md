@@ -209,9 +209,23 @@ flask --app run run --debug
 Truy cập: **http://127.0.0.1:5000**
 
 ### Chạy kiểm thử
+Chạy trong thư mục `QuickOrder/` (không cần cài thêm thư viện):
 ```bash
-pytest
+python -m unittest discover -s tests -v
 ```
+(`pytest` cũng chạy được các test này.)
+
+### Gửi email xác nhận khi khách đăng ký
+Khách đăng ký tài khoản sẽ nhận mã 6 số qua email. Đặt các biến môi trường sau trên máy chủ (Render: tab **Environment**):
+
+| Biến | Ý nghĩa |
+|---|---|
+| `MAIL_API_KEY` | Khóa API của Brevo (brevo.com) |
+| `MAIL_FROM` | Email người gửi, phải được xác minh trên Brevo |
+| `MAIL_FROM_NAME` | Tên người gửi (tùy chọn, mặc định `QuickOrder`) |
+| `HTTPS` | Đặt `1` khi chạy trên HTTPS (Render), để cookie đăng nhập chỉ đi qua HTTPS |
+
+Khi thử trên máy chưa có khóa API, đặt `MAIL_CONSOLE=1`: mã xác nhận sẽ in ra terminal thay vì gửi thư. Không bật biến này trên máy chủ thật.
 
 > 📝 *Các lệnh ở bước 5 và 6 sẽ được TV4 (Backend) xác nhận lại khi hoàn tất khung dự án.*
 

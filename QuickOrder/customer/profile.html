@@ -1,17 +1,102 @@
 <!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Hồ sơ - QuickOrder</title><link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="../css/style.css"><script src="../js/app.js"></script></head><body>
 <div class="wrap" style="max-width:640px">
   <h1>Hồ sơ</h1>
-  <p class="sub">Thông tin tài khoản và địa chỉ giao hàng.</p>
-  <div class="shell" style="margin-bottom:16px">
-    <b>Chưa có đăng nhập khách hàng</b><br>Đăng ký và đăng nhập cho khách đang được phát triển. Hiện chỉ chủ quán đăng ký được tài khoản.
-  </div>
-  <form class="card" onsubmit="return false">
-    <label class="field"><span>Họ tên</span><input name="name" disabled></label>
-    <label class="field"><span>Số điện thoại</span><input name="phone" type="tel" disabled></label>
-    <label class="field"><span>Email</span><input name="email" type="email" disabled></label>
-    <label class="field"><span>Địa chỉ giao hàng</span><input name="address" disabled></label>
-    <button class="btn" type="button" disabled>Lưu thay đổi</button>
+  <p class="sub" id="sub">Đang tải...</p>
+
+  <section id="choose" class="grid" hidden>
+    <div class="card">
+      <h2>Hồ sơ tạm</h2>
+      <p class="meta">Chỉ giữ trong tab này. Đóng tab là mất. Không cần đăng ký.</p>
+      <button class="btn" id="pickGuest" type="button" style="margin-top:12px">Dùng hồ sơ tạm</button>
+    </div>
+    <div class="card">
+      <h2>Tài khoản</h2>
+      <p class="meta">Lưu hồ sơ lâu dài, đăng nhập được trên mọi thiết bị.</p>
+      <div class="row" style="margin-top:12px;justify-content:flex-start">
+        <a class="btn" href="account.html?mode=register">Tạo tài khoản</a>
+        <a class="btn ghost" href="account.html">Đăng nhập</a>
+      </div>
+    </div>
+  </section>
+
+  <div id="banner" class="shell" hidden style="margin-bottom:16px"></div>
+
+  <form class="card" id="f" hidden>
+    <label class="field"><span>Họ tên</span><input name="full_name" autocomplete="name" maxlength="100" required></label>
+    <label class="field"><span>Số điện thoại</span><input name="phone" type="tel" autocomplete="tel" required></label>
+    <label class="field" id="emailRow" hidden><span>Email (không đổi được)</span><input name="email" type="email" readonly></label>
+    <div class="err" id="er"></div>
+    <div class="row" style="margin-top:4px">
+      <button class="btn ghost" type="button" id="back" hidden>Quay lại lựa chọn</button>
+      <button class="btn" id="save" type="submit">Lưu thông tin</button>
+    </div>
   </form>
 </div>
-<script>QO.header('customer');</script>
-</body></html>
+<script>
+QO.header();
+const $ = id => document.getElementById(id);
+const form = $('f');
+const FLAG = 'qo_guest_on';            // tab này đang dùng hồ sơ tạm (sessionStorage, đóng tab là mất)
+let currentUser = null;
+
+const phoneOk = s => /^\+?\d{9,11}$/.test(s.replace(/[\s.-]/g, ''));
+const fill = p => { form.full_name.value = p.full_name || ''; form.phone.value = p.phone || ''; };
+
+const showChooser = () => {
+  $('sub').textContent = 'Chọn cách lưu thông tin gọi món của bạn.';
+  $('choose').hidden = false;
+  $('banner').hidden = true;
+  form.hidden = true;
+};
+
+const showGuest = () => {
+  sessionStorage.setItem(FLAG, '1');
+  $('sub').textContent = 'Hồ sơ tạm dùng cho lần gọi món này.';
+  $('choose').hidden = true;
+  $('banner').hidden = false;
+  $('banner').innerHTML = '<b>Hồ sơ tạm</b><br>Thông tin chỉ được giữ trong tab này. Đóng tab là mất. Muốn giữ lâu dài, <a href="account.html?mode=register">tạo tài khoản</a>.';
+  $('emailRow').hidden = true;
+  $('back').hidden = false;
+  fill(QO.getGuest() || {});
+  form.hidden = false;
+};
+
+const showAccount = u => {
+  $('sub').textContent = 'Hồ sơ lưu trong tài khoản, dùng được trên mọi thiết bị.';
+  $('choose').hidden = true;
+  $('banner').hidden = true;
+  $('back').hidden = true;
+  $('emailRow').hidden = false;
+  form.email.value = u.email;
+  fill(u);
+  form.hidden = false;
+};
+
+$('pickGuest').onclick = showGuest;
+$('back').onclick = () => { sessionStorage.removeItem(FLAG); showChooser(); };
+
+form.onsubmit = async e => {
+  e.preventDefault();
+  $('er').textContent = '';
+  const v = {full_name: form.full_name.value.trim(), phone: form.phone.value.trim()};
+  if (!v.full_name) { $('er').textContent = 'Vui lòng nhập họ tên.'; return; }
+  if (!phoneOk(v.phone)) { $('er').textContent = 'Số điện thoại không hợp lệ (9 đến 11 chữ số).'; return; }
+  try {
+    if (currentUser) {
+      currentUser = await QO.api('PUT', 'me', v);     // lưu vào kho dữ liệu
+      fill(currentUser);
+      QO.toast('Đã lưu thông tin tài khoản');
+    } else {
+      QO.setGuest(v);                                  // chỉ lưu trong tab này
+      QO.toast('Đã lưu hồ sơ tạm trong tab này');
+    }
+  } catch (x) { $('er').textContent = x.message; }
+};
+
+(async () => {
+  currentUser = await QO.session();
+  if (currentUser) showAccount(currentUser);
+  else if (sessionStorage.getItem(FLAG) === '1') showGuest();
+  else showChooser();
+})();
+</script></body></html>

@@ -53,11 +53,16 @@ const QO = (() => {
   const setCart = c => { sessionStorage.setItem('qo_cart', JSON.stringify(c)); badge(); };
   const badge = () => { const n = getCart().items.reduce((s, i) => s + i.qty, 0), b = document.getElementById('cart-n'); if (b) b.textContent = n || ''; if (b) b.style.display = n ? '' : 'none'; };
 
+  // Hồ sơ tạm của khách chưa có tài khoản: chỉ lưu trong sessionStorage của tab, đóng tab là mất (không gửi lên server)
+  const getGuest = () => { try { return JSON.parse(sessionStorage.getItem('qo_guest')) || null; } catch { return null; } };
+  const setGuest = p => sessionStorage.setItem('qo_guest', JSON.stringify(p));
+  const clearGuest = () => sessionStorage.removeItem('qo_guest');
+
   // ===== Thanh công cụ chung =====
   // Hai khu vực của sản phẩm: "Người dùng" (khách gọi món) và "Chủ quán".
   // Mục quản lý của chủ quán chỉ hiện khi phiên đăng nhập là chủ quán.
   const SECTIONS = {
-    customer: [['customer/home.html', 'Gọi món tại bàn'], ['customer/cart.html', 'Giỏ hàng'], ['customer/orders.html', 'Đơn hàng'], ['customer/profile.html', 'Hồ sơ']],
+    customer: [['customer/home.html', 'Gọi món tại bàn'], ['customer/scan.html', 'Quét QR'], ['customer/cart.html', 'Giỏ hàng'], ['customer/orders.html', 'Đơn hàng'], ['customer/profile.html', 'Hồ sơ']],
     merchant: [['merchant/dashboard.html', 'Tổng quan'], ['merchant/orders.html', 'Đơn hàng'], ['merchant/menu.html', 'Thực đơn'], ['merchant/tables.html', 'Bàn & QR'], ['merchant/revenue.html', 'Doanh thu'], ['merchant/shop.html', 'Hồ sơ quán']]
   };
   const linkTo = ([p, t]) => `<a href="${rootUrl()}${p}"${location.pathname.endsWith('/' + p) ? ' class="on" aria-current="page"' : ''}>${t}${p === 'customer/cart.html' ? '<span class="badge-n" id="cart-n"></span>' : ''}</a>`;
@@ -106,5 +111,5 @@ const QO = (() => {
   };
 
   return {api, all, get, by, put, del, isOpenNow, isAccepting, isOrderable, validateSelection, qrUrl, STATUS,
-    esc, money, norm, hash, toast, param, session, logout, requireOwner, myShop, getCart, setCart, header};
+    esc, money, norm, hash, toast, param, session, logout, requireOwner, myShop, getCart, setCart, getGuest, setGuest, clearGuest, header};
 })();

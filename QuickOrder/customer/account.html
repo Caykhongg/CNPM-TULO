@@ -1,0 +1,151 @@
+<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tài khoản khách - QuickOrder</title><link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="../css/style.css"><script src="../js/app.js"></script></head><body>
+<div class="wrap" style="max-width:480px">
+  <h1>Tài khoản khách</h1>
+  <p class="sub">Tài khoản giữ hồ sơ của bạn lâu dài, đăng nhập được trên mọi thiết bị.</p>
+  <div class="chips" aria-label="Chọn đăng nhập hoặc tạo tài khoản">
+    <button class="chip on" id="tl" type="button">Đăng nhập</button>
+    <button class="chip" id="tr" type="button">Tạo tài khoản</button>
+  </div>
+
+  <form class="card" id="login">
+    <label class="field"><span>Email</span><input name="email" type="email" autocomplete="username" required></label>
+    <label class="field"><span>Mật khẩu</span><input name="password" type="password" autocomplete="current-password" required></label>
+    <div class="err" id="le"></div>
+    <button class="btn" style="width:100%">Đăng nhập</button>
+  </form>
+
+  <form class="card" id="reg" hidden>
+    <label class="field"><span>Họ tên</span><input name="full_name" autocomplete="name" maxlength="100" required></label>
+    <label class="field"><span>Số điện thoại</span><input name="phone" type="tel" autocomplete="tel" required></label>
+    <label class="field"><span>Email</span><input name="email" type="email" autocomplete="email" required></label>
+    <label class="field"><span>Mật khẩu (tối thiểu 8 ký tự)</span><input name="password" type="password" minlength="8" autocomplete="new-password" required></label>
+    <div class="err" id="re"></div>
+    <button class="btn" style="width:100%">Gửi mã xác nhận</button>
+    <p class="meta" style="margin-top:10px">Chúng tôi sẽ gửi mã 6 số tới email để xác nhận đúng chủ email.</p>
+  </form>
+
+  <form class="card" id="code" hidden>
+    <h2>Nhập mã xác nhận</h2>
+    <p class="meta" style="margin-bottom:12px">Mã 6 số đã gửi tới <b id="sentTo"></b>, có hiệu lực 10 phút. Không thấy thư? Hãy kiểm tra mục thư rác.</p>
+    <label class="field"><span>Mã 6 số</span><input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required></label>
+    <div class="err" id="ce"></div>
+    <button class="btn" style="width:100%">Xác nhận và tạo tài khoản</button>
+    <div class="row" style="margin-top:12px">
+      <button class="btn ghost sm" type="button" id="back">Sửa thông tin</button>
+      <button class="btn ghost sm" type="button" id="resend">Gửi lại mã</button>
+    </div>
+    <p class="meta" style="margin-top:10px">Email đã có tài khoản sẽ không nhận được mã. Trong trường hợp đó, hãy quay lại và chọn Đăng nhập.</p>
+  </form>
+</div>
+<script>
+QO.header();
+const $ = id => document.getElementById(id);
+let pendingEmail = '', cooldown = 0, timer = null;
+
+const showTab = register => {
+  $('login').hidden = register;
+  $('reg').hidden = !register;
+  $('code').hidden = true;
+  $('tl').classList.toggle('on', !register);
+  $('tr').classList.toggle('on', register);
+};
+
+// Nút gửi lại mã chỉ bật lại sau 60 giây
+const startCooldown = (sec = 60) => {
+  clearTimeout(timer);
+  cooldown = sec;
+  const tick = () => {
+    const btn = $('resend');
+    if (cooldown <= 0) { btn.disabled = false; btn.textContent = 'Gửi lại mã'; return; }
+    btn.disabled = true;
+    btn.textContent = `Gửi lại sau ${cooldown} giây`;
+    cooldown--;
+    timer = setTimeout(tick, 1000);
+  };
+  tick();
+};
+
+const showCodeStep = () => {
+  $('login').hidden = true;
+  $('reg').hidden = true;
+  $('code').hidden = false;
+  $('sentTo').textContent = pendingEmail;
+  $('code').code.value = '';
+  $('ce').textContent = '';
+  startCooldown(60);
+};
+
+$('tl').onclick = () => showTab(false);
+$('tr').onclick = () => showTab(true);
+
+$('login').onsubmit = async e => {
+  e.preventDefault();
+  $('le').textContent = '';
+  const f = e.target;
+  try {
+    const u = await QO.api('POST', 'login', {email: f.email.value.trim().toLowerCase(), password: f.password.value});
+    if (u.role !== 'customer') {
+      await QO.api('POST', 'logout').catch(() => {});
+      throw new Error('Tài khoản này là tài khoản chủ quán hoặc quản trị. Hãy đăng nhập ở mục Chủ quán.');
+    }
+    location.href = 'profile.html';
+  } catch (x) { $('le').textContent = x.message; }
+};
+
+$('reg').onsubmit = async e => {
+  e.preventDefault();
+  $('re').textContent = '';
+  const f = e.target;
+  const body = {
+    full_name: f.full_name.value.trim(),
+    phone: f.phone.value.trim(),
+    email: f.email.value.trim().toLowerCase(),
+    password: f.password.value
+  };
+  try {
+    await QO.api('POST', 'customer/signup', body);
+    pendingEmail = body.email;
+    showCodeStep();
+  } catch (x) { $('re').textContent = x.message; }
+};
+
+$('code').onsubmit = async e => {
+  e.preventDefault();
+  $('ce').textContent = '';
+  try {
+    await QO.api('POST', 'customer/verify', {email: pendingEmail, code: e.target.code.value.trim()});
+    QO.clearGuest();              // thông tin đã nằm trong tài khoản, không cần giữ hồ sơ tạm nữa
+    location.href = 'profile.html';
+  } catch (x) { $('ce').textContent = x.message; }
+};
+
+$('resend').onclick = async () => {
+  $('ce').textContent = '';
+  try {
+    await QO.api('POST', 'customer/resend', {email: pendingEmail});
+    QO.toast('Đã gửi mã mới tới email của bạn');
+    startCooldown(60);
+  } catch (x) {
+    $('ce').textContent = x.message;
+    const m = x.message.match(/(\d+) giây/);           // server báo còn bao lâu nữa mới gửi được
+    if (m) startCooldown(Number(m[1]));
+  }
+};
+
+$('back').onclick = () => {
+  clearTimeout(timer);
+  $('code').hidden = true;
+  $('reg').hidden = false;
+};
+
+(async () => {
+  const u = await QO.session();
+  if (u && u.role === 'customer') { location.replace('profile.html'); return; }
+  showTab(QO.param('mode') === 'register');
+  const g = QO.getGuest();                              // điền sẵn từ hồ sơ tạm đang dùng trong tab này
+  if (g) {
+    $('reg').full_name.value = g.full_name || '';
+    $('reg').phone.value = g.phone || '';
+  }
+})();
+</script></body></html>

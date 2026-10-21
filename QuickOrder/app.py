@@ -1,5 +1,6 @@
 import os
 import posixpath
+import re
 import secrets
 import sqlite3
 import time
@@ -9,8 +10,10 @@ from flask import Flask, abort, g, jsonify, request, send_from_directory, sessio
 from werkzeug.exceptions import HTTPException
 from werkzeug.security import check_password_hash, generate_password_hash
 
+import mailer
+
 BASE = os.path.dirname(os.path.abspath(__file__))
-DB = os.path.join(BASE, "database.db")
+DB = os.environ.get("QO_DB") or os.path.join(BASE, "database.db")   # QO_DB: dùng khi chạy kiểm thử
 PUBLIC = ("customer/", "merchant/", "admin/", "css/", "js/")   # chỉ phục vụ các thư mục này
 
 app = Flask(__name__, static_folder=None)
@@ -49,6 +52,15 @@ ITEMS = ("dishes", "optionGroups", "options")
 # Khóa tạm đăng nhập theo email: 5 lần sai thì chặn 15 phút (lưu trong bộ nhớ, khởi động lại thì mất)
 LOGIN_FAILS = {}
 MAX_FAILS, LOCK_SECONDS = 5, 15 * 60
+# Xác nhận email khi khách đăng ký tài khoản
+EMAIL_RE = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
+PHONE_RE = re.compile(r"\+?\d{9,11}")
+CODE_TTL = 10 * 60          # mã có hiệu lực 10 phút
+CODE_MAX_TRIES = 5          # nhập sai 5 lần thì phải xin mã mới
+RESEND_WAIT = 60            # hai lần gửi mã cách nhau tối thiểu 60 giây
+MAX_SENDS_PER_HOUR = 5      # mỗi email tối đa 5 lần gửi mã trong 1 giờ
+SENT_MSG = "Nếu email chưa có tài khoản, mã xác nhận 6 số đã được gửi tới email này. Mã có hiệu lực 10 phút."
+BAD_CODE = "Mã xác nhận không đúng hoặc đã hết hạn."
 MSG = {400: "Dữ liệu không hợp lệ.", 401: "Bạn cần đăng nhập.",
        403: "Bạn không có quyền thực hiện thao tác này.", 404: "Không tìm thấy dữ liệu.",
        405: "Thao tác này không được phép.", 415: "Dữ liệu gửi lên phải là JSON."}
@@ -105,6 +117,17 @@ def json_body():
     if not isinstance(d, dict):
         abort(400)
     return d
+
+
+def profile_fields(d):
+    """Họ tên và số điện thoại của khách. Trả về (dict, None) nếu hợp lệ, hoặc (None, thông báo lỗi)."""
+    name = text(d, "full_name")
+    phone = re.sub(r"[\s.-]", "", text(d, "phone"))
+    if not name or len(name) > 100:
+        return None, "Vui lòng nhập họ tên (tối đa 100 ký tự)."
+    if not PHONE_RE.fullmatch(phone):
+        return None, "Số điện thoại không hợp lệ (9 đến 11 chữ số)."
+    return {"full_name": name, "phone": phone}, None
 
 
 def current_user():
@@ -277,6 +300,129 @@ def logout():
 @app.get("/api/me")
 def whoami():
     return jsonify(out(login_required()))
+
+
+@app.put("/api/me")
+def update_me():
+    """Khách (hoặc chủ quán) sửa họ tên và số điện thoại của chính mình. Không đổi được email hay vai trò."""
+    u = login_required()
+    fields, err = profile_fields(json_body())
+    if err:
+        return jsonify(error=err), 400
+    with db() as c:
+        c.execute("UPDATE users SET full_name = ?, phone = ? WHERE id = ?",
+                  (fields["full_name"], fields["phone"], u["id"]))
+        row = c.execute("SELECT * FROM users WHERE id = ?", (u["id"],)).fetchone()
+    return jsonify(out(row))
+
+
+# ---------- Tài khoản khách: đăng ký có xác nhận email ----------
+def start_code(c, email, base, now):
+    """Tạo mã 6 số mới cho email, lưu hash vào pending_signups. Trả về (mã, None) hoặc (None, lỗi).
+    base: họ tên, số điện thoại, hash mật khẩu. Kiểm tra thời gian chờ và số lần gửi trong 1 giờ."""
+    old = c.execute("SELECT * FROM pending_signups WHERE email = ?", (email,)).fetchone()
+    if old and now - old["last_sent_at"] < RESEND_WAIT:
+        wait = RESEND_WAIT - (now - old["last_sent_at"])
+        return None, f"Vui lòng đợi {wait} giây rồi gửi lại."
+    in_hour = bool(old) and now - old["window_start"] < 3600
+    window_start = old["window_start"] if in_hour else now
+    sent = old["sent_in_window"] if in_hour else 0
+    if sent >= MAX_SENDS_PER_HOUR:
+        return None, "Đã gửi quá nhiều mã cho email này. Thử lại sau 1 giờ."
+    code = f"{secrets.randbelow(10 ** 6):06d}"
+    c.execute(
+        "INSERT OR REPLACE INTO pending_signups (email, full_name, phone, password_hash, code_hash, "
+        "expires_at, tries, last_sent_at, window_start, sent_in_window) VALUES (?,?,?,?,?,?,0,?,?,?)",
+        (email, base["full_name"], base["phone"], base["password_hash"], generate_password_hash(code),
+         now + CODE_TTL, now, window_start, sent + 1),
+    )
+    return code, None
+
+
+def send_code_or_error(email, code):
+    """Gửi mã qua email. Trả về phản hồi lỗi nếu gửi thất bại, hoặc None nếu thành công."""
+    try:
+        mailer.send_code(email, code)
+    except mailer.MailError as e:
+        return jsonify(error=str(e)), 502
+    return None
+
+
+@app.post("/api/customer/signup")
+def customer_signup():
+    d = json_body()
+    email = text(d, "email").lower()
+    pw = str(d.get("password") or "")
+    fields, err = profile_fields(d)
+    if err:
+        return jsonify(error=err), 400
+    if not EMAIL_RE.fullmatch(email) or len(pw) < 8:          # NFR-10: mật khẩu tối thiểu 8 ký tự
+        return jsonify(error="Email không hợp lệ hoặc mật khẩu dưới 8 ký tự."), 400
+    now = int(time.time())
+    with db() as c:
+        c.execute("DELETE FROM pending_signups WHERE expires_at < ?", (now - 3600,))   # dọn đăng ký đã bỏ dở
+        if c.execute("SELECT 1 FROM users WHERE email = ?", (email,)).fetchone():
+            return jsonify(message=SENT_MSG), 200      # không tiết lộ email đã có tài khoản hay chưa
+        base = {**fields, "password_hash": generate_password_hash(pw)}
+        code, err = start_code(c, email, base, now)
+        if err:
+            return jsonify(error=err), 429
+    failed = send_code_or_error(email, code)
+    if failed:
+        return failed
+    return jsonify(message=SENT_MSG)
+
+
+@app.post("/api/customer/resend")
+def customer_resend():
+    email = text(json_body(), "email").lower()
+    now = int(time.time())
+    with db() as c:
+        p = c.execute("SELECT * FROM pending_signups WHERE email = ?", (email,)).fetchone()
+        if not p:
+            return jsonify(message=SENT_MSG), 200
+        base = {"full_name": p["full_name"], "phone": p["phone"], "password_hash": p["password_hash"]}
+        code, err = start_code(c, email, base, now)
+        if err:
+            return jsonify(error=err), 429
+    failed = send_code_or_error(email, code)
+    if failed:
+        return failed
+    return jsonify(message=SENT_MSG)
+
+
+@app.post("/api/customer/verify")
+def customer_verify():
+    d = json_body()
+    email = text(d, "email").lower()
+    code = re.sub(r"\s", "", str(d.get("code") or ""))
+    if not re.fullmatch(r"\d{6}", code):
+        return jsonify(error=BAD_CODE), 400
+    now = int(time.time())
+    with db() as c:
+        p = c.execute("SELECT * FROM pending_signups WHERE email = ?", (email,)).fetchone()
+        if not p:
+            return jsonify(error=BAD_CODE), 400
+        if now > p["expires_at"]:
+            c.execute("DELETE FROM pending_signups WHERE email = ?", (email,))
+            return jsonify(error="Mã đã hết hạn. Bấm gửi lại mã để nhận mã mới."), 400
+        if p["tries"] >= CODE_MAX_TRIES:
+            return jsonify(error="Nhập sai quá nhiều lần. Bấm gửi lại mã để nhận mã mới."), 429
+        if not check_password_hash(p["code_hash"], code):
+            c.execute("UPDATE pending_signups SET tries = tries + 1 WHERE email = ?", (email,))
+            return jsonify(error=BAD_CODE), 400
+        if c.execute("SELECT 1 FROM users WHERE email = ?", (email,)).fetchone():
+            c.execute("DELETE FROM pending_signups WHERE email = ?", (email,))
+            return jsonify(error="Email này đã có tài khoản. Hãy đăng nhập."), 409
+        cur = c.execute(
+            "INSERT INTO users (full_name, email, phone, password_hash, role) VALUES (?,?,?,?,'customer')",
+            (p["full_name"], email, p["phone"], p["password_hash"]),
+        )
+        c.execute("DELETE FROM pending_signups WHERE email = ?", (email,))
+        row = c.execute("SELECT * FROM users WHERE id = ?", (cur.lastrowid,)).fetchone()
+    session.clear()
+    session["uid"] = row["id"]
+    return jsonify(out(row)), 201
 
 
 # ---------- CRUD chung ----------

@@ -1,0 +1,114 @@
+<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Quét mã QR - QuickOrder</title><link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="../css/style.css"><script src="../js/app.js"></script>
+<style>
+  .scan{position:relative;background:#000;border-radius:var(--r);overflow:hidden;aspect-ratio:3/4;max-height:70vh;margin:0 auto}
+  .scan video{width:100%;height:100%;object-fit:cover;display:block}
+  .scan-frame{position:absolute;inset:18%;border:3px solid var(--acc);border-radius:16px;box-shadow:0 0 0 999px #0007;pointer-events:none}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script></head><body>
+<div class="wrap" style="max-width:560px">
+  <a class="meta" href="home.html">← Quay lại</a>
+  <h1 style="margin-top:8px">Quét mã QR trên bàn</h1>
+  <p class="sub">Đưa camera vào mã QR đặt trên bàn. Menu của đúng quán và số bàn sẽ mở ngay.</p>
+  <div class="scan">
+    <video id="video" playsinline muted autoplay></video>
+    <div class="scan-frame" aria-hidden="true"></div>
+  </div>
+  <p class="meta" id="status" style="margin:12px 0;text-align:center" aria-live="polite">Đang mở camera...</p>
+  <div class="err" id="err" style="text-align:center" role="alert"></div>
+  <div class="card" style="margin-top:16px">
+    <h2>Không quét được?</h2>
+    <p class="meta" style="margin-bottom:10px">Dán đường link hoặc mã bàn in trên mã QR.</p>
+    <form id="manual" class="mini" style="margin-top:0">
+      <input id="raw" placeholder="Dán link hoặc mã bàn" autocomplete="off" required>
+      <button class="btn sm">Mở menu</button>
+    </form>
+  </div>
+</div>
+<script>
+QO.header();
+const $ = id => document.getElementById(id);
+const video = $('video'), statusEl = $('status'), errEl = $('err');
+const canvas = document.createElement('canvas');
+const ctx = canvas.getContext('2d', {willReadFrequently: true});
+let stream = null, frame = 0, lastBad = 0;
+
+const stopCamera = () => {
+  cancelAnimationFrame(frame);
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+};
+addEventListener('pagehide', stopCamera);
+
+// Chỉ nhận đường dẫn tới đúng trang menu của quán (cùng trang web, có số bàn). Mọi link khác bị bỏ qua.
+const menuLink = raw => {
+  let u;
+  try { u = new URL(String(raw).trim(), location.href); } catch { return null; }
+  if (u.origin !== location.origin || !/\/customer\/restaurant\.html$/.test(u.pathname)) return null;
+  return u.searchParams.get('id') && u.searchParams.get('table') ? u.href : null;
+};
+
+const go = href => { stopCamera(); location.href = href; };
+const showErr = m => { errEl.textContent = m; };
+
+const tick = () => {
+  if (video.readyState >= 2 && video.videoWidth && window.jsQR) {
+    const scale = Math.min(1, 640 / video.videoWidth);      // thu nhỏ khung hình cho nhanh trên điện thoại
+    canvas.width = Math.round(video.videoWidth * scale);
+    canvas.height = Math.round(video.videoHeight * scale);
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const found = jsQR(img.data, img.width, img.height, {inversionAttempts: 'dontInvert'});
+    if (found) {
+      const link = menuLink(found.data);
+      if (link) return go(link);
+      if (Date.now() - lastBad > 3000) { lastBad = Date.now(); showErr('Mã này không phải mã bàn của QuickOrder.'); }
+    }
+  }
+  frame = requestAnimationFrame(tick);
+};
+
+const startCamera = async () => {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    statusEl.textContent = '';
+    showErr('Trình duyệt này không mở được camera (trang cần HTTPS). Hãy dán link hoặc mã bàn bên dưới.');
+    return;
+  }
+  if (!window.jsQR) {
+    statusEl.textContent = '';
+    showErr('Không tải được bộ đọc mã QR. Kiểm tra kết nối Internet, hoặc dán link hoặc mã bàn bên dưới.');
+    return;
+  }
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({video: {facingMode: {ideal: 'environment'}}, audio: false});
+    video.srcObject = stream;
+    await video.play();
+    statusEl.textContent = 'Đưa mã QR vào khung hình.';
+    frame = requestAnimationFrame(tick);
+  } catch (x) {
+    statusEl.textContent = '';
+    showErr(x.name === 'NotAllowedError'
+      ? 'Bạn chưa cho phép dùng camera. Hãy bật quyền camera cho trình duyệt rồi tải lại trang, hoặc dán link hoặc mã bàn bên dưới.'
+      : 'Không mở được camera. Hãy dán link hoặc mã bàn bên dưới.');
+  }
+};
+
+$('manual').onsubmit = async e => {
+  e.preventDefault();
+  showErr('');
+  const raw = $('raw').value.trim();
+  const link = menuLink(raw);
+  if (link) return go(link);
+  // Chỉ có mã bàn (chuỗi ký tự trong QR): tra cứu để biết quán nào
+  if (/^[A-Za-z0-9_-]{16,}$/.test(raw)) {
+    try {
+      const r = await QO.api('GET', 'qr/' + encodeURIComponent(raw));
+      return go(`restaurant.html?id=${r.shop.id}&table=${encodeURIComponent(raw)}`);
+    } catch (x) {
+      showErr(x.name === 'NotFound' ? 'Không tìm thấy bàn này. Mã có thể đã được đổi, hãy quét lại mã QR trên bàn.' : x.message);
+      return;
+    }
+  }
+  showErr('Link hoặc mã bàn không hợp lệ.');
+};
+
+startCamera();
+</script></body></html>
