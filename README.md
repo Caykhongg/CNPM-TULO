@@ -1,4 +1,4 @@
-# 🍵 QuickOrder – Ứng dụng đặt món cho quán nhỏ
+# 🍵 QuickOrder – Ứng dụng gọi món tại bàn cho quán nhỏ
 
 > Đồ án cuối kỳ môn **Công nghệ phần mềm** – Khoa Công nghệ Thông tin và Truyền thông, Đại học CMC
 > Nhóm thực hiện: **Nhóm TULO**
@@ -13,64 +13,79 @@
 ## 📌 Mục lục
 
 1. [Giới thiệu](#-giới-thiệu)
-2. [Vấn đề và giải pháp](#-vấn-đề-và-giải-pháp)
-3. [Đối tượng người dùng](#-đối-tượng-người-dùng)
-4. [Chức năng chính](#-chức-năng-chính)
-5. [Công nghệ sử dụng](#-công-nghệ-sử-dụng)
-6. [Cấu trúc thư mục](#-cấu-trúc-thư-mục)
-7. [Hướng dẫn cài đặt và chạy](#-hướng-dẫn-cài-đặt-và-chạy)
-8. [Tài khoản demo](#-tài-khoản-demo)
-9. [Tài liệu dự án](#-tài-liệu-dự-án)
-10. [Quy trình làm việc nhóm](#-quy-trình-làm-việc-nhóm)
-11. [Kế hoạch thực hiện](#-kế-hoạch-thực-hiện)
-12. [Thành viên nhóm](#-thành-viên-nhóm)
+2. [Luồng hoạt động](#-luồng-hoạt-động)
+3. [Vấn đề và giải pháp](#-vấn-đề-và-giải-pháp)
+4. [Đối tượng người dùng](#-đối-tượng-người-dùng)
+5. [Chức năng chính](#-chức-năng-chính)
+6. [Công nghệ sử dụng](#-công-nghệ-sử-dụng)
+7. [Cấu trúc thư mục](#-cấu-trúc-thư-mục)
+8. [Hướng dẫn cài đặt và chạy](#-hướng-dẫn-cài-đặt-và-chạy)
+9. [Tài khoản demo](#-tài-khoản-demo)
+10. [Tài liệu dự án](#-tài-liệu-dự-án)
+11. [Quy trình làm việc nhóm](#-quy-trình-làm-việc-nhóm)
+12. [Kế hoạch thực hiện](#-kế-hoạch-thực-hiện)
+13. [Thành viên nhóm](#-thành-viên-nhóm)
 
 ---
 
 ## 📖 Giới thiệu
 
-**QuickOrder** là ứng dụng web giúp các quán ăn, quán nước quy mô nhỏ (trà sữa, cà phê, cơm, bún phở) nhận và quản lý đơn hàng trực tuyến.
+**QuickOrder** là ứng dụng web giúp các quán ăn, quán nước quy mô nhỏ (trà sữa, cà phê, cơm, bún phở) nhận và quản lý đơn gọi món **ngay tại bàn**.
 
-- Mỗi quán có **một trang menu riêng**, khách hàng đặt món trực tiếp.
-- Chủ quán **xử lý đơn và theo dõi doanh thu** ngay trên hệ thống.
+- Mỗi bàn có **một mã QR**. Khách ngồi tại quán quét mã bằng điện thoại, xem menu và gọi món, **không cần cài ứng dụng, không cần đăng nhập**.
+- Đơn được gửi **thẳng đến quầy/bếp**. Chủ quán nhận đơn, cập nhật trạng thái và theo dõi doanh thu ngay trên hệ thống.
 - **Không thu phí hoa hồng** cho nền tảng trung gian.
+- Hệ thống chỉ phục vụ **khách ăn tại quán**, không có đặt hàng từ xa hay giao hàng.
+
+## 🔄 Luồng hoạt động
+
+```mermaid
+flowchart LR
+    A[Khách quét QR tại bàn] --> B[Xem menu và chọn món]
+    B --> C[Gửi đơn]
+    C --> D{Chủ quán xác nhận}
+    D -->|Đồng ý| E[Đang làm]
+    D -->|Từ chối| G[Đã hủy]
+    E --> F[Hoàn thành]
+```
 
 ## 🎯 Vấn đề và giải pháp
 
-**Vấn đề:** các quán nhỏ hiện nhận đơn chủ yếu qua điện thoại, Zalo hoặc ghi tay, dẫn đến:
+**Vấn đề:** các quán nhỏ hiện nhận món chủ yếu bằng cách nhân viên ghi tay hoặc gọi miệng tại bàn, dẫn đến:
 
-- Dễ nhầm đơn, sót món, khó theo dõi trạng thái đơn hàng.
-- Khách phải chờ quán trả lời mới biết món còn hay hết.
-- Chủ quán không có số liệu doanh thu, món bán chạy để ra quyết định.
-- Các nền tảng lớn (GrabFood, ShopeeFood) thu hoa hồng cao, quán nhỏ khó chịu nổi.
+- Dễ nhầm đơn, sót món, khó theo dõi trạng thái từng đơn.
+- Khách phải vẫy gọi nhân viên nhiều lần, chờ lâu mới được ghi món; không biết món còn hay hết.
+- Chủ quán không có số liệu thống kê doanh thu, món bán chạy để ra quyết định kinh doanh.
+- Các nền tảng lớn thu phí hoa hồng cao, quán nhỏ khó chịu nổi.
 
-**Giải pháp:** hệ thống đặt món trực tuyến gồm ba phân hệ **Khách hàng – Chủ quán – Quản trị viên**.
+**Giải pháp:** hệ thống gọi món tại bàn gồm ba phân hệ **Khách hàng – Chủ quán – Quản trị viên**.
 
 ## 👥 Đối tượng người dùng
 
 | Vai trò | Mục tiêu sử dụng |
 |---|---|
-| **Khách hàng** | Xem menu, đặt món nhanh, theo dõi đơn, xem lịch sử và đánh giá |
-| **Chủ quán / nhân viên** | Nhận đơn, cập nhật trạng thái, quản lý menu và khuyến mãi, xem thống kê |
+| **Khách hàng** (ngồi tại quán) | Quét QR, xem menu, gọi món nhanh, theo dõi đơn; không cần tài khoản |
+| **Chủ quán / nhân viên** | Quản lý bàn và QR, quản lý menu, nhận đơn, cập nhật trạng thái, xem thống kê |
 | **Quản trị viên (Admin)** | Duyệt và khóa quán, quản lý người dùng, xem thống kê chung, xử lý khiếu nại |
 
 ## ✨ Chức năng chính
 
-### 🛒 Phân hệ khách hàng
-- Đăng ký, đăng nhập, quản lý thông tin cá nhân và địa chỉ giao hàng
-- Xem danh sách quán, tìm kiếm, lọc theo loại món
-- Xem menu, chọn món kèm tùy chọn (size, topping, ghi chú)
-- Quản lý giỏ hàng, đặt hàng giao tận nơi hoặc tự đến lấy
-- Thanh toán bằng tiền mặt hoặc chuyển khoản/QR
-- Theo dõi trạng thái đơn: *Chờ xác nhận → Đang làm → Đang giao → Hoàn thành*
-- Xem lịch sử đơn, đặt lại đơn cũ, đánh giá quán và món
+### 🛒 Phân hệ khách hàng (không cần đăng nhập)
+- Quét mã QR tại bàn để mở menu đúng quán, gắn sẵn số bàn
+- Xem menu, tìm món, lọc theo danh mục
+- Chọn món kèm tùy chọn (size, topping, ghi chú), quản lý giỏ hàng
+- Gửi đơn thẳng đến quầy bếp; gọi thêm món bất cứ lúc nào
+- Thanh toán bằng tiền mặt tại quầy hoặc chuyển khoản/QR
+- Theo dõi trạng thái đơn: *Chờ xác nhận → Đang làm → Hoàn thành*; hủy đơn khi chưa được xác nhận
+- *(Nâng cao)* Đăng ký tài khoản tùy chọn để xem lịch sử, đặt lại món, đánh giá quán và món
 
 ### 🏪 Phân hệ chủ quán
-- Quản lý thông tin quán và giờ mở cửa
-- Quản lý menu: thêm, sửa, xóa món, hình ảnh, giá, đánh dấu hết món
-- Nhận đơn mới, xác nhận hoặc từ chối, cập nhật trạng thái đơn
-- Quản lý mã giảm giá và khuyến mãi
-- Thống kê doanh thu theo ngày, tháng và món bán chạy
+- Đăng ký quán, quản lý thông tin quán và giờ mở cửa
+- **Quản lý bàn và tạo mã QR** cho từng bàn
+- Quản lý menu: thêm, sửa, xóa món, hình ảnh, giá, tùy chọn, đánh dấu hết món
+- **Nhận thông báo đơn mới**, xác nhận hoặc từ chối đơn, cập nhật trạng thái đơn
+- Xác nhận thanh toán; *(nâng cao)* tính tiền theo bàn
+- *(Nâng cao)* Mã giảm giá, thống kê doanh thu theo ngày/tháng và món bán chạy
 
 ### 🛡️ Phân hệ quản trị viên
 - Duyệt hoặc khóa tài khoản quán
@@ -78,23 +93,24 @@
 - Thống kê toàn hệ thống, xử lý khiếu nại
 
 ### 🚀 Điểm nổi bật
-- **Đặt tại bàn bằng QR:** mỗi bàn có mã QR, khách quét mã, chọn món và gửi thẳng đến quầy bếp
-- **Thông báo đơn mới** cho chủ quán
+- **Gọi món bằng QR tại bàn:** khách quét là gọi, không cần app, không cần đăng ký
+- **Thông báo đơn mới** cho chủ quán theo thời gian thực
 - **Không thu hoa hồng**
-- **Gợi ý món hay đặt** dựa trên lịch sử đặt hàng
+- **Gợi ý món hay đặt** dựa trên lịch sử và món bán chạy
 
 ### 📊 Mức độ ưu tiên
 
 | Mức | Chức năng |
 |---|---|
-| **Bắt buộc** (làm trước) | Đăng ký, đăng nhập, phân quyền; quản lý menu; xem menu, giỏ hàng, đặt hàng; quản lý và cập nhật trạng thái đơn; lịch sử đơn |
-| **Nâng cao** (nếu còn thời gian) | Thống kê doanh thu, mã giảm giá, đánh giá món, QR đặt tại bàn, thanh toán trực tuyến |
+| **Bắt buộc** (làm trước) | Đăng ký, đăng nhập, phân quyền (chủ quán, admin); quản lý bàn và QR; quản lý menu; quét QR, xem menu, giỏ hàng, gửi đơn; xử lý và cập nhật trạng thái đơn; xác nhận thanh toán |
+| **Nâng cao** (nếu còn thời gian) | Thống kê doanh thu, mã giảm giá, đánh giá món, tính tiền theo bàn, lịch sử đơn cho khách có tài khoản, trang Admin hoàn chỉnh |
+| **Mở rộng** (ngoài kế hoạch) | Thanh toán trực tuyến qua cổng thanh toán |
 
 ### ⚙️ Yêu cầu phi chức năng
-- Giao diện responsive, dùng tốt trên điện thoại
+- Giao diện responsive, ưu tiên điện thoại (khách dùng điện thoại để quét QR)
 - Thời gian tải trang dưới 3 giây
-- Bảo mật: mã hóa mật khẩu, phân quyền rõ ràng, chống SQL injection
-- Xử lý được nhiều người đặt món cùng lúc mà không phát sinh lỗi
+- Bảo mật: mã hóa mật khẩu, phân quyền rõ ràng, chống SQL injection, mã bàn (QR) ngẫu nhiên khó đoán
+- Xử lý được nhiều bàn gọi món cùng lúc mà không phát sinh lỗi
 
 ## 🛠️ Công nghệ sử dụng
 
@@ -117,80 +133,24 @@
 > ⚠️ Cấu trúc dưới đây là bản dự kiến, sẽ được cập nhật khi dự án phát triển.
 
 ```
-quickorder.app/
-│
-├── public/                     # Tài nguyên tĩnh
-│   ├── favicon.ico
-│   └── assets/
-│       ├── icons/              # SVG icons (home, cart, user, merchant, etc.)
-│       └── images/             # Hình ảnh logo, banner, món ăn mặc định
-│
-├── src/                        # Mã nguồn chính của dự án
-│   ├── assets/                 # CSS/Tailwind styles
-│   │   └── main.css            # Styles toàn cục & custom utilities
-│   │
-│   ├── components/             # Các Component tái sử dụng
-│   │   ├── common/             # Component dùng chung cho cả 2 role
-│   │   │   ├── Header.js / .jsx
-│   │   │   ├── BottomNav.js / .jsx
-│   │   │   ├── Modal.js / .jsx
-│   │   │   └── SearchBar.js / .jsx
-│   │   │
-│   │   ├── customer/           # Component riêng cho Người dùng
-│   │   │   ├── CategoryList.js
-│   │   │   ├── RestaurantCard.js
-│   │   │   ├── MenuItemCard.js
-│   │   │   ├── CartDrawer.js
-│   │   │   └── OrderTracker.js
-│   │   │
-│   │   └── merchant/           # Component riêng cho Chủ quán
-│   │       ├── StatCard.js
-│   │       ├── OrderStatusBadge.js
-│   │       ├── MerchantOrderItem.js
-│   │       ├── MenuManageItem.js
-│   │       └── RevenueChart.js
-│   │
-│   ├── pages/                  # Các Màn hình (Screens) theo đúng UI thiết kế
-│   │   ├── customer/           # 7 Màn hình Người dùng
-│   │   │   ├── WelcomeScreen.js        # 1. Màn hình chào mừng
-│   │   │   ├── HomeScreen.js           # 2. Trang chủ
-│   │   │   ├── SearchScreen.js         # 3. Kết quả tìm kiếm
-│   │   │   ├── RestaurantDetailScreen.js # 4. Chi tiết & thực đơn
-│   │   │   ├── CartScreen.js           # 5. Giỏ hàng & Thanh toán
-│   │   │   ├── OrderTrackingScreen.js  # 6. Theo dõi đơn hàng
-│   │   │   └── ProfileScreen.js        # 7. Hồ sơ cá nhân
-│   │   │
-│   │   └── merchant/           # 6 Màn hình Chủ quán
-│   │       ├── LoginScreen.js          # 1. Đăng nhập
-│   │       ├── DashboardScreen.js      # 2. Trang chủ (Dashboard)
-│   │       ├── MenuManageScreen.js     # 3. Quản lý thực đơn
-│   │       ├── OrderManageScreen.js    # 4. Quản lý đơn hàng
-│   │       ├── RevenueScreen.js        # 5. Thống kê doanh thu
-│   │       └── MerchantProfileScreen.js# 6. Tài khoản chủ quán
-│   │
-│   ├── services/               # Kết nối API Backend & Database
-│   │   ├── api.config.js       # Cấu hình Axios / Fetch Base URL
-│   │   ├── auth.service.js     # API Đăng nhập, Đăng ký, Token
-│   │   ├── restaurant.service.js # API Quán ăn & Món ăn
-│   │   ├── order.service.js    # API Đặt hàng & Cập nhật trạng thái
-│   │   └── merchant.service.js # API Doanh thu & Quản lý thực đơn
-│   │
-│   ├── context/                # Quản lý State toàn cục (State Management)
-│   │   ├── AuthContext.js      # Lưu thông tin user/merchant đã đăng nhập
-│   │   ├── CartContext.js      # Lưu giỏ hàng, tính tổng tiền
-│   │   └── RoleContext.js      # Chuyển đổi giữa Customer / Merchant
-│   │
-│   ├── utils/                  # Hàm tiện ích dùng chung
-│   │   ├── formatCurrency.js   # Format tiền tệ (VD: 55.000đ)
-│   │   ├── formatDate.js       # Format ngày tháng/thời gian
-│   │   └── constants.js        # Khai báo hằng số (Trạng thái đơn, Roles)
-│   │
-│   ├── App.js                  # Component điều hướng chính (Router)
-│   └── index.js                # Entry point
-│
-├── .env                        # Biến môi trường (URL API, Keys)
-├── package.json                # Dependencies & Scripts
-└── README.md                   # Hướng dẫn chạy dự án
+CNPM-TULO/
+├── app/
+│   ├── __init__.py          # Khởi tạo Flask app
+│   ├── models.py            # Các model SQLAlchemy
+│   ├── auth/                # Đăng ký, đăng nhập, phân quyền
+│   ├── customer/            # Quét QR, menu, giỏ hàng, đơn hàng
+│   ├── owner/               # Quản lý quán, bàn, menu, đơn, thống kê
+│   ├── admin/               # Trang quản trị
+│   ├── api/                 # Endpoint JSON (AJAX, thông báo đơn mới)
+│   ├── templates/           # Giao diện Jinja2
+│   └── static/              # CSS, JS, hình ảnh
+├── docs/                    # Tài liệu dự án (SRS, thiết kế, test case...)
+├── tests/                   # Mã kiểm thử tự động
+├── config.py                # Cấu hình ứng dụng
+├── run.py                   # Điểm chạy ứng dụng
+├── requirements.txt         # Danh sách thư viện
+├── .env.example             # Mẫu biến môi trường
+└── README.md
 ```
 
 ## 🚀 Hướng dẫn cài đặt và chạy
@@ -257,13 +217,12 @@ pytest
 
 ## 🔑 Tài khoản demo
 
-> Sẽ cập nhật sau khi có dữ liệu mẫu.
+> Sẽ cập nhật sau khi có dữ liệu mẫu. Khách hàng không cần tài khoản: chỉ cần mở đường dẫn QR của một bàn.
 
 | Vai trò | Email | Mật khẩu |
 |---|---|---|
 | Admin | `admin@quickorder.vn` | `...` |
 | Chủ quán | `owner@quickorder.vn` | `...` |
-| Khách hàng | `customer@quickorder.vn` | `...` |
 
 🔗 **Bản demo trực tuyến:** *(cập nhật sau khi deploy)*
 
@@ -273,15 +232,15 @@ Toàn bộ tài liệu nằm trong thư mục [`docs/`](./docs).
 
 | Tài liệu | Trạng thái |
 |---|---|
-| Danh sách chức năng | ⬜ done |
-| Đặc tả yêu cầu phần mềm (SRS) | ⬜ done |
-| Use Case | ⬜ done |
-| User Story | ⬜ done |
-| Thiết kế CSDL (ERD) | ⬜ done |
-| Class Diagram | ⬜ done |
-| Sequence Diagram | ⬜ done |
-| Wireframe (Figma) | ⬜ done |
-| Cấu trúc Route/API | ⬜ done |
+| Danh sách chức năng | ✅ Hoàn thành; 17/49 chức năng Sprint 1 đã Hoàn thành ([xem file](docs/Danh_sach_chuc_nang_QuickOrder.xlsx)) |
+| Đặc tả yêu cầu phần mềm (SRS) | ✅ Bản 1.0, hoàn thành Sprint 0–1 ([xem file](docs/SRS_QuickOrder_v1.0.docx)) |
+| Use Case | ✅ Bản 1.0, hoàn thành Sprint 0–1 ([xem file](docs/UseCase_QuickOrder_v1.0.docx)) |
+| User Story | ✅ Hoàn thành; 17 story Sprint 1 đã Hoàn thành, bản 0.1 ([xem file](docs/UserStory_QuickOrder_v0.1.xlsx)) |
+| Thiết kế CSDL (ERD) | ⬜ Chưa làm |
+| Class Diagram | ✅ Bản 1.0, hoàn thành Sprint 0–1 ([xem file](docs/ClassDiagram_QuickOrder_v1.0.docx)) |
+| Sequence Diagram | ✅ Bản 1.0, 9 luồng chính ([xem file](docs/SequenceDiagram_QuickOrder_v1.0.docx)) |
+| Wireframe (Figma) | 🔄 Đã có bản phác thảo 10 màn hình ([xem file](docs/Wireframe_QuickOrder_v1.0.docx)); chờ dựng trên Figma, thêm liên kết Figma khi xong | |
+| Cấu trúc Route/API | ✅ Bản 1.0, 82 route và 12 endpoint JSON ([xem file](docs/RouteAPI_QuickOrder_v1.0.docx)) |
 | Test case và báo cáo kiểm thử | ⬜ Chưa làm |
 
 ## 🤝 Quy trình làm việc nhóm
@@ -311,10 +270,10 @@ refactor: tách hàm tính giá
 
 | Tuần | Giai đoạn | Nội dung chính |
 |---|---|---|
-| 1–3 | **Sprint 0** | Chuẩn bị, phân tích và thiết kế (SRS, Use Case, ERD, wireframe...) |
-| 4–5 | **Sprint 1** | Nền tảng và Menu: đăng ký/đăng nhập, phân quyền, quản lý menu |
-| 6–7 | **Sprint 2** | Đặt hàng và xử lý đơn: giỏ hàng, đặt món, cập nhật trạng thái |
-| 8 | **Sprint 3** | Tính năng nâng cao: thống kê, mã giảm giá, đánh giá, QR, trang Admin |
+| 1–3 | ✅ **Sprint 0** | Chuẩn bị, phân tích và thiết kế (SRS, Use Case, ERD, wireframe...) |
+| 4–5 | ✅ **Sprint 1** | Nền tảng, menu và QR bàn: đăng ký/đăng nhập, phân quyền, quản lý quán, menu, bàn và mã QR, quét QR xem menu |
+| 6–7 | 🔄 **Sprint 2** (đang thực hiện) | Gọi món và xử lý đơn: giỏ hàng, gửi đơn, thanh toán, thông báo đơn mới, cập nhật trạng thái |
+| 8 | **Sprint 3** | Tính năng nâng cao: thống kê, mã giảm giá, đánh giá, lịch sử đơn, hoàn thiện trang Admin |
 | 9 | **Sprint 4** | Kiểm thử tổng thể, đo hiệu năng, sửa lỗi |
 | 10 | Hoàn thiện | Deploy, tài liệu hướng dẫn, báo cáo, slide, demo |
 
