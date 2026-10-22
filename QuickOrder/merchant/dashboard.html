@@ -12,24 +12,24 @@ QO.header('merchant');
   const shop = await QO.myShop();
   if (!shop) { body.innerHTML = '<div class="empty"><b>Bạn chưa tạo quán</b><a class="btn" href="shop.html">Tạo quán</a></div>'; return; }
 
-  const [dishes, tables, orders] = await Promise.all([QO.by('dishes', 'shop_id', shop.id), QO.by('tables', 'shop_id', shop.id), QO.api('GET', 'orders?shop_id=' + shop.id + '&limit=200')]);
+  // "Hôm nay" tính ở máy chủ theo giờ Việt Nam, không bị giới hạn bởi số đơn đã tải.
+  // Chờ xác nhận và đang làm là số hiện tại, không phụ thuộc ngày.
+  const [dishes, tables, rev] = await Promise.all([
+    QO.by('dishes', 'shop_id', shop.id),
+    QO.by('tables', 'shop_id', shop.id),
+    QO.api('GET', 'revenue?range=today&shop_id=' + shop.id),
+  ]);
   const live = dishes.filter(d => !d.is_deleted), onSale = live.filter(d => d.is_available).length;
   const [label, tone] = QO.STATUS[shop.status];
   const note = shop.status === 'APPROVED' ? '' : `<div class="shell" style="margin-bottom:20px"><b>Quán chưa mở cho khách</b><br>${shop.status === 'PENDING' ? 'Đang chờ quản trị viên duyệt.' : 'Ghi chú từ quản trị: ' + QO.esc(shop.status_note)}</div>`;
 
-  // Số liệu đơn: "hôm nay" theo giờ máy của chủ quán; doanh thu tính trên đơn đã hoàn thành
-  const today = new Date().toDateString();
-  const mine = orders.filter(o => QO.parseTime(o.created_at).toDateString() === today);
-  const done = mine.filter(o => o.status === 'COMPLETED');
-  const revenue = done.reduce((s, o) => s + o.total_amount, 0);
-  const waiting = orders.filter(o => o.status === 'PENDING').length;
-  const working = orders.filter(o => o.status === 'CONFIRMED' || o.status === 'PREPARING').length;
+  const s = rev.summary, now = rev.now;
   const ordersHtml = `<div class="stats">
-      <div class="stat"><small>Đơn hôm nay</small><b>${mine.length}</b></div>
-      <div class="stat"><small>Chờ xác nhận</small><b>${waiting}</b></div>
-      <div class="stat"><small>Đang làm</small><b>${working}</b></div>
-      <div class="stat"><small>Hoàn thành hôm nay</small><b>${done.length}</b></div>
-      <div class="stat"><small>Doanh thu hôm nay</small><b>${QO.money(revenue)}</b></div>
+      <div class="stat"><small>Đơn hôm nay</small><b>${s.orders}</b></div>
+      <div class="stat"><small>Chờ xác nhận</small><b>${now.pending}</b></div>
+      <div class="stat"><small>Đang làm</small><b>${now.working}</b></div>
+      <div class="stat"><small>Hoàn thành hôm nay</small><b>${s.completed}</b></div>
+      <div class="stat"><small>Doanh thu hôm nay</small><b>${QO.money(s.revenue)}</b></div>
     </div>
     <a class="btn" href="orders.html">Xem và xử lý đơn</a>`;
 
