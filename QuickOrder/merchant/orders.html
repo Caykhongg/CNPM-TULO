@@ -1,16 +1,109 @@
 <!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Đơn hàng - QuickOrder</title><link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="../css/style.css"><script src="../js/app.js"></script></head><body>
 <div class="wrap">
   <h1>Đơn hàng</h1>
-  <p class="sub">Nhận đơn, xác nhận và cập nhật trạng thái cho khách.</p>
-  <div class="chips" aria-label="Lọc theo trạng thái">
-    <span class="chip on">Tất cả</span><span class="chip">Chờ xác nhận</span><span class="chip">Đang làm</span><span class="chip">Đang giao</span><span class="chip">Hoàn thành</span>
-  </div>
-  <div class="empty"><b>Chưa có đơn hàng</b>Đơn mới sẽ hiện ở đây. Chức năng đơn hàng đang được phát triển.</div>
-  <div class="shell" style="margin-top:16px">
-    <b>Luồng xử lý đơn</b><br>Chờ xác nhận → Đang làm → Đang giao → Hoàn thành. Có thể từ chối đơn khi hết món hoặc quán tạm đóng.
-  </div>
+  <p class="sub">Đơn mới tự hiện sau vài giây. Xác nhận, hoàn thành hoặc hủy đơn tại đây.</p>
+  <div id="top"></div>
+  <div class="chips" id="chips" aria-label="Lọc theo trạng thái"></div>
+  <div id="list" style="margin-top:14px"><div class="empty"><b>Đang tải...</b></div></div>
 </div>
 <script>
 QO.header('merchant');
-(async () => { await QO.requireOwner(); })();
-</script></body></html>
+(async () => {
+  await QO.requireOwner();
+  const topEl = document.getElementById('top'), chipsEl = document.getElementById('chips'), listEl = document.getElementById('list');
+  const shop = await QO.myShop();
+  if (!shop) { listEl.innerHTML = '<div class="empty"><b>Bạn chưa tạo quán</b><a class="btn" href="shop.html">Tạo quán</a></div>'; return; }
+  if (shop.status !== 'APPROVED') topEl.innerHTML = '<div class="shell" style="margin-bottom:14px"><b>Quán chưa mở cho khách</b><br>Khách chưa thể đặt món cho đến khi quán được duyệt.</div>';
+
+  // Nhóm trạng thái để lọc; CONFIRMED (dữ liệu cũ) và PREPARING cùng là "Đang làm"
+  const bucket = s => ({PENDING: 'PENDING', CONFIRMED: 'WORKING', PREPARING: 'WORKING', COMPLETED: 'COMPLETED', CANCELLED: 'CANCELLED'})[s];
+  const FILTERS = [['', 'Tất cả'], ['PENDING', 'Chờ xác nhận'], ['WORKING', 'Đang làm'], ['COMPLETED', 'Hoàn thành'], ['CANCELLED', 'Đã hủy']];
+  // Nút chuyển trạng thái theo luồng SRS: Chờ xác nhận → Đang làm; Đang làm → Hoàn thành; hủy được ở cả hai bước
+  const ACTIONS = {
+    PENDING: [['PREPARING', 'Xác nhận, bắt đầu làm', 'btn sm'], ['CANCELLED', 'Từ chối', 'btn bad sm']],
+    CONFIRMED: [['COMPLETED', 'Hoàn thành', 'btn sm'], ['CANCELLED', 'Hủy đơn', 'btn bad sm']],
+    PREPARING: [['COMPLETED', 'Hoàn thành', 'btn sm'], ['CANCELLED', 'Hủy đơn', 'btn bad sm']],
+  };
+
+  let orders = [], tableNo = {}, filter = '', seen = null, busy = false;
+
+  const card = o => {
+    const [label, tone] = QO.ORDER_STATUS[o.status] || ['Không rõ', ''];
+    const table = o.table_id && tableNo[o.table_id] ? 'Bàn ' + tableNo[o.table_id] : 'Không rõ bàn';
+    const items = o.items.map(i => `<li><b>${i.quantity} ×</b> ${QO.esc(i.dish_name)}${i.note ? `<div class="meta">${QO.esc(i.note)}</div>` : ''}</li>`).join('');
+    const acts = (ACTIONS[o.status] || []).map(([to, t, k]) => `<button class="${k}" data-status="${to}" data-id="${o.id}">${t}</button>`).join('');
+    const paid = o.payment_status === 'PAID';
+    const pay = o.status === 'CANCELLED' ? '' :
+      `<button class="btn ghost sm" data-pay="${paid ? 'UNPAID' : 'PAID'}" data-id="${o.id}">${paid ? 'Hoàn tác thanh toán' : 'Xác nhận đã thanh toán'}</button>`;
+    return `<article class="item" style="display:block;${o.status === 'PENDING' ? 'border-color:var(--acc);' : ''}">
+      <div class="row">
+        <div><h3>Đơn #${o.id} · ${QO.esc(table)}</h3><div class="meta">${QO.esc(QO.fmtTime(o.created_at))} · ${QO.esc(o.customer_name)}</div></div>
+        <span class="tag ${tone}">${label}</span>
+      </div>
+      <ul style="margin:10px 0;padding-left:18px">${items}</ul>
+      ${o.note ? `<div class="meta" style="margin-bottom:8px">Ghi chú: ${QO.esc(o.note)}</div>` : ''}
+      <div class="row" style="margin-top:8px">
+        <div class="meta">${QO.PAY_METHOD[o.payment_method] || ''} · ${paid ? 'Đã thanh toán' : 'Chưa thanh toán'} · <b class="price">${QO.money(o.total_amount)}</b></div>
+        <div class="acts">${acts}${pay}</div>
+      </div>
+    </article>`;
+  };
+
+  const draw = () => {
+    chipsEl.innerHTML = FILTERS.map(([v, t]) => {
+      const n = v ? orders.filter(o => bucket(o.status) === v).length : orders.length;
+      return `<button type="button" class="chip${filter === v ? ' on' : ''}" data-f="${v}">${t} (${n})</button>`;
+    }).join('');
+    const rows = filter ? orders.filter(o => bucket(o.status) === filter) : orders;
+    listEl.innerHTML = rows.length
+      ? '<div class="list">' + rows.map(card).join('') + '</div>'
+      : `<div class="empty"><b>${orders.length ? 'Không có đơn ở mục này' : 'Chưa có đơn hàng'}</b>Đơn mới của khách tại bàn sẽ hiện ở đây.</div>`;
+  };
+
+  chipsEl.onclick = e => { const b = e.target.closest('[data-f]'); if (b) { filter = b.dataset.f; draw(); } };
+
+  listEl.onclick = async e => {
+    const st = e.target.closest('[data-status]'), pb = e.target.closest('[data-pay]');
+    const btn = st || pb;
+    if (!btn || busy) return;
+    if (st && st.dataset.status === 'CANCELLED' && !confirm('Hủy đơn này? Khách sẽ thấy đơn đã hủy.')) return;
+    busy = true; btn.disabled = true;
+    try {
+      const o = st
+        ? await QO.api('PUT', `orders/${btn.dataset.id}/status`, {status: st.dataset.status})
+        : await QO.api('PUT', `orders/${btn.dataset.id}/payment`, {payment_status: pb.dataset.pay});
+      orders = orders.map(x => x.id === o.id ? o : x);
+      QO.toast(st ? `Đơn #${o.id}: ${QO.ORDER_STATUS[o.status][0]}` : `Đơn #${o.id}: ${o.payment_status === 'PAID' ? 'đã thanh toán' : 'chưa thanh toán'}`);
+    } catch (err) {
+      QO.toast(err.message);
+    } finally {
+      busy = false;
+    }
+    draw();
+  };
+
+  // Kiểm tra đơn mới mỗi 7 giây (FR-40). Bỏ qua lần kiểm tra khi đang thao tác hoặc tab bị ẩn.
+  const tick = async () => {
+    if (busy || document.hidden) return;
+    try {
+      const [list, tables] = await Promise.all([QO.api('GET', 'orders?shop_id=' + shop.id), QO.by('tables', 'shop_id', shop.id)]);
+      tableNo = Object.fromEntries(tables.map(t => [t.id, t.table_number]));
+      const ids = new Set(list.map(o => o.id));
+      if (seen) {
+        const fresh = list.filter(o => o.status === 'PENDING' && !seen.has(o.id)).length;
+        if (fresh) QO.toast(`Có ${fresh} đơn mới`);
+      }
+      seen = ids;
+      orders = list;
+      topEl.querySelectorAll('.err').forEach(el => el.remove());
+      draw();
+    } catch (err) {
+      if (!topEl.querySelector('.err')) topEl.insertAdjacentHTML('afterbegin', `<div class="err" style="margin-bottom:12px">Mất kết nối tới máy chủ. Đang thử lại... (${QO.esc(err.message)})</div>`);
+    }
+  };
+
+  await tick();
+  setInterval(tick, 7000);
+})();
+</script>
+</body></html>

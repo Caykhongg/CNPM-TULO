@@ -9,14 +9,14 @@
       <h2>Tóm tắt</h2>
       <div id="sum"></div>
       <h2 style="margin-top:20px">Nhận món</h2>
-      <div class="field"><span>Hình thức</span><div class="chips" id="modes" style="margin:0"></div></div>
-      <label class="field"><span>Họ tên</span><input name="name" autocomplete="name" placeholder="Tên người nhận"></label>
-      <label class="field"><span>Số điện thoại</span><input name="phone" type="tel" autocomplete="tel"></label>
+      <p class="meta" id="where" style="margin:0 0 12px"></p>
+      <label class="field"><span>Họ tên</span><input name="name" autocomplete="name" maxlength="60" placeholder="Tên người gọi món"></label>
       <div class="field"><span>Thanh toán</span><div class="chips" id="pays" style="margin:0"></div></div>
       <div class="meta" id="pay" style="margin:-4px 0 12px"></div>
-      <label class="field"><span>Ghi chú</span><textarea name="note" rows="2" placeholder="VD: ít đá, không hành"></textarea></label>
+      <label class="field"><span>Ghi chú</span><textarea name="note" rows="2" maxlength="300" placeholder="VD: ít đá, không hành"></textarea></label>
+      <div class="err" id="err"></div>
       <button class="btn" type="button" id="order" disabled style="width:100%">Đặt hàng</button>
-      <p class="meta" style="margin-top:10px">Đặt hàng đang được phát triển. Khi có chức năng đơn hàng, nút này sẽ được mở.</p>
+      <p class="meta" style="margin-top:10px">Đơn sẽ được gửi tới quán. Bạn theo dõi trạng thái ở mục Đơn hàng.</p>
     </aside>
   </div>
 </div>
@@ -24,13 +24,17 @@
 QO.header('customer');
 (async () => {
   const box = document.getElementById('box'), sum = document.getElementById('sum'), from = document.getElementById('from');
-  const checkout = document.getElementById('checkout'), modesEl = document.getElementById('modes'), paysEl = document.getElementById('pays'), payEl = document.getElementById('pay');
-  let shop = null, mode = '', method = 'cash';
+  const checkout = document.getElementById('checkout'), paysEl = document.getElementById('pays'), payEl = document.getElementById('pay');
+  const whereEl = document.getElementById('where'), errEl = document.getElementById('err'), orderBtn = document.getElementById('order');
+  const nameEl = document.querySelector('input[name="name"]'), noteEl = document.querySelector('textarea[name="note"]');
+  const PAYS = [['CASH', 'Tiền mặt'], ['TRANSFER', 'Chuyển khoản / QR']];
+  let shop = null, tb = null, method = 'CASH', sending = false;
 
+  // Giá một phần = giá món + tùy chọn (khớp với giá server tính)
   const line = i => (i.price + i.options.reduce((s, o) => s + o.extra_price, 0)) * i.qty;
 
   const renderPay = () => {
-    if (method !== 'transfer') { payEl.textContent = 'Thanh toán tiền mặt khi nhận món hoặc tại quầy.'; return; }
+    if (method !== 'TRANSFER') { payEl.textContent = 'Thanh toán tiền mặt khi nhận món hoặc tại quầy.'; return; }
     if (!shop) { payEl.textContent = ''; return; }
     const info = shop.bank_account_number ? 'Số tài khoản: ' + QO.esc(shop.bank_account_number) : 'Quán chưa cập nhật số tài khoản.';
     // Chỉ cho phép liên kết http(s) để tránh javascript: từ dữ liệu quán
@@ -38,11 +42,10 @@ QO.header('customer');
     payEl.innerHTML = info + qr;
   };
 
-  const draw = async () => {
+  const draw = () => {
     const c = QO.getCart();
     const back = c.shop_id ? 'restaurant.html?id=' + c.shop_id + (c.table ? '&table=' + encodeURIComponent(c.table) : '') : 'home.html';
     document.getElementById('back').href = back;
-    shop = c.shop_id ? await QO.get('shops', c.shop_id) : null;
     from.textContent = shop ? 'Quán: ' + shop.name : '';
 
     if (!c.items.length) {
@@ -67,12 +70,13 @@ QO.header('customer');
     sum.innerHTML = `<div class="kv"><span>Số món</span><b>${count}</b></div>
       <div class="row" style="margin-top:12px"><b>Tổng cộng</b><span class="price" style="font-size:20px">${QO.money(total)}</span></div>`;
 
-    const modeList = [['dine', 'Tại bàn']];   // SRS: chỉ phục vụ khách tại bàn, không mang đi hay giao hàng
-    if (!modeList.some(([v]) => v === mode)) mode = modeList[0][0];
-    modesEl.innerHTML = modeList.map(([v, t]) => `<button type="button" class="chip${mode === v ? ' on' : ''}" data-mode="${v}">${t}</button>`).join('');
-    paysEl.innerHTML = [['cash', 'Tiền mặt'], ['transfer', 'Chuyển khoản / QR']]
-      .map(([v, t]) => `<button type="button" class="chip${method === v ? ' on' : ''}" data-pay="${v}">${t}</button>`).join('');
+    whereEl.innerHTML = tb ? `Tại bàn: <b>Bàn ${QO.esc(tb.table_number)}</b>` : 'Chưa xác định bàn. <a href="scan.html"><b>Quét lại mã QR trên bàn</b></a>';
+    paysEl.innerHTML = PAYS.map(([v, t]) => `<button type="button" class="chip${method === v ? ' on' : ''}" data-pay="${v}">${t}</button>`).join('');
     renderPay();
+
+    const accepting = !!shop && QO.isAccepting(shop);
+    orderBtn.disabled = sending || !tb || !accepting;
+    orderBtn.textContent = sending ? 'Đang gửi...' : (shop && !accepting ? 'Quán hiện không nhận đơn' : 'Đặt hàng');
   };
 
   box.onclick = e => {
@@ -83,17 +87,46 @@ QO.header('customer');
     c.items = c.items.filter(x => x.qty > 0);
     QO.setCart(c); draw();
   };
-  modesEl.onclick = e => { const b = e.target.closest('[data-mode]'); if (b) { mode = b.dataset.mode; draw(); } };
   paysEl.onclick = e => { const b = e.target.closest('[data-pay]'); if (b) { method = b.dataset.pay; draw(); } };
 
-  // Điền sẵn tên và số điện thoại từ tài khoản hoặc hồ sơ tạm (chỉ điền khi ô đang trống)
+  orderBtn.onclick = async () => {
+    if (sending) return;                          // chặn bấm đúp (NFR-31)
+    const c = QO.getCart();
+    errEl.textContent = '';
+    if (!c.items.length || !tb) return;
+    sending = true; draw();
+    try {
+      const order = await QO.api('POST', 'orders', {
+        shop_id: c.shop_id,
+        table_id: tb.id,
+        customer_name: (nameEl.value || '').trim() || 'Khách tại bàn',
+        payment_method: method,
+        note: noteEl.value.trim(),
+        items: c.items.map(i => ({dish_id: i.dish_id, quantity: i.qty, option_ids: i.options.map(o => o.id)})),
+      });
+      QO.addOrder({id: order.id, shop_id: order.shop_id, shop_name: shop.name, table_number: tb.table_number});
+      QO.setCart({shop_id: null, table: null, items: []});
+      location.href = 'orders.html';
+    } catch (e) {
+      errEl.textContent = e.message;
+      sending = false; draw();
+    }
+  };
+
+  // Tải quán và xác định bàn từ mã QR đã quét (phải thuộc đúng quán trong giỏ)
+  const c0 = QO.getCart();
+  shop = c0.shop_id ? await QO.get('shops', c0.shop_id) : null;
+  if (c0.table) {
+    try {
+      const r = await QO.api('GET', 'qr/' + encodeURIComponent(c0.table));
+      if (shop && r.shop.id === shop.id) tb = r.table;
+    } catch {}
+  }
+
+  // Điền sẵn họ tên từ tài khoản hoặc hồ sơ tạm (chỉ điền khi ô đang trống)
   const who = await QO.session();
   const profile = who && who.role === 'customer' ? who : QO.getGuest();
-  if (profile) {
-    const nameEl = document.querySelector('input[name="name"]'), phoneEl = document.querySelector('input[name="phone"]');
-    if (nameEl && !nameEl.value) nameEl.value = profile.full_name || '';
-    if (phoneEl && !phoneEl.value) phoneEl.value = profile.phone || '';
-  }
+  if (profile && nameEl && !nameEl.value) nameEl.value = profile.full_name || '';
 
   draw();
 })();
