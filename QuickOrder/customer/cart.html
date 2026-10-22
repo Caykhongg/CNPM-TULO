@@ -104,7 +104,8 @@ QO.header('customer');
         note: noteEl.value.trim(),
         items: c.items.map(i => ({dish_id: i.dish_id, quantity: i.qty, option_ids: i.options.map(o => o.id)})),
       });
-      QO.addOrder({id: order.id, shop_id: order.shop_id, shop_name: shop.name, table_number: tb.table_number});
+      // Lưu mã riêng của đơn trên thiết bị này để xem và hủy đơn sau này (server chỉ trả mã này một lần)
+      QO.addOrder({id: order.id, token: order.access_token, shop_id: order.shop_id, shop_name: shop.name, table_number: tb.table_number});
       QO.setCart({shop_id: null, table: null, items: []});
       location.href = 'orders.html';
     } catch (e) {

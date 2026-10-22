@@ -108,6 +108,8 @@ CREATE TABLE IF NOT EXISTS orders (
     payment_status TEXT NOT NULL DEFAULT 'UNPAID'
         CHECK (payment_status IN ('UNPAID', 'PAID')),
     total_amount INTEGER NOT NULL DEFAULT 0 CHECK (total_amount >= 0),
+    access_hash TEXT NOT NULL DEFAULT '',          -- băm SHA-256 của mã riêng của đơn (khách dùng để xem và hủy)
+    cancel_reason TEXT NOT NULL DEFAULT '',        -- lý do hủy đơn
     note TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (shop_id) REFERENCES shops(id)

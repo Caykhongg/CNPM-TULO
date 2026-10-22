@@ -16,10 +16,12 @@ QO.header('customer');
   const cache = new Map();          // id đơn -> dữ liệu mới nhất từ server
   let loadError = '';
 
-  // Lấy trạng thái từng đơn đã lưu. Đơn không còn trên server thì bỏ khỏi danh sách; lỗi mạng thì giữ dữ liệu cũ.
+  // Đọc đơn bằng mã riêng đã lưu lúc đặt. Đơn không còn (hoặc mã sai) thì bỏ khỏi danh sách; lỗi mạng thì giữ dữ liệu cũ.
   const load = async () => {
     const saved = QO.getOrders();
-    const results = await Promise.all(saved.map(s => QO.get('orders', s.id).catch(() => undefined)));
+    const results = await Promise.all(saved.map(s =>
+      QO.api('GET', `orders/${s.id}?token=${encodeURIComponent(s.token || '')}`)
+        .catch(e => e.name === 'NotFound' ? null : undefined)));
     const keep = [];
     saved.forEach((s, i) => {
       const r = results[i];
@@ -37,6 +39,7 @@ QO.header('customer');
     const items = o.items.map(i => `<li>${i.quantity} × ${QO.esc(i.dish_name)}${i.note ? ` <span class="meta">(${QO.esc(i.note)})</span>` : ''}</li>`).join('');
     const pay = `${QO.PAY_METHOD[o.payment_method] || ''} · ${o.payment_status === 'PAID' ? 'Đã thanh toán' : 'Chưa thanh toán'}`;
     const cancel = o.status === 'PENDING' ? `<div style="margin-top:10px"><button class="btn bad sm" data-cancel="${o.id}">Hủy đơn</button></div>` : '';
+    const reason = o.status === 'CANCELLED' && o.cancel_reason ? `<div class="meta" style="margin-top:6px">Lý do: ${QO.esc(o.cancel_reason)}</div>` : '';
     return `<article class="item" style="display:block">
       <div class="row">
         <div><h3>Đơn #${o.id} · ${QO.esc(s.shop_name || 'Quán')}</h3><div class="meta">Bàn ${QO.esc(s.table_number)} · ${QO.esc(QO.fmtTime(o.created_at))}</div></div>
@@ -45,6 +48,7 @@ QO.header('customer');
       <ul style="margin:10px 0 6px;padding-left:18px">${items}</ul>
       ${o.note ? `<div class="meta">Ghi chú: ${QO.esc(o.note)}</div>` : ''}
       <div class="row" style="margin-top:8px"><span class="meta">${pay}</span><span class="price">${QO.money(o.total_amount)}</span></div>
+      ${reason}
       ${cancel}
     </article>`;
   };
@@ -67,9 +71,11 @@ QO.header('customer');
   listEl.onclick = async e => {
     const b = e.target.closest('[data-cancel]'); if (!b) return;
     if (!confirm('Hủy đơn này?')) return;
+    const saved = QO.getOrders().find(x => x.id === Number(b.dataset.cancel));
+    if (!saved) return;
     b.disabled = true;
     try {
-      const o = await QO.api('PUT', 'orders/' + b.dataset.cancel + '/cancel', {});
+      const o = await QO.api('PUT', 'orders/' + saved.id + '/cancel', {token: saved.token || ''});
       cache.set(o.id, o);
       QO.toast('Đã hủy đơn #' + o.id);
     } catch (err) {
