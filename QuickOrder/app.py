@@ -823,6 +823,114 @@ def list_orders():
         return jsonify(orders_json(c, rows))
 
 
+REVENUE_PRESETS = ("today", "7d", "30d", "month")
+MAX_RANGE_DAYS = 366
+
+
+def bucket_keys(start, end, group):
+    """Mọi kỳ trong khoảng, kể cả kỳ không có đơn, để biểu đồ không bị hụt cột."""
+    if group == "month":
+        keys, y, m = [], start.year, start.month
+        while (y, m) <= (end.year, end.month):
+            keys.append(f"{y:04d}-{m:02d}")
+            y, m = y + m // 12, m % 12 + 1
+        return keys
+    return [(start + timedelta(days=i)).isoformat() for i in range((end - start).days + 1)]
+
+
+@app.get("/api/revenue")
+def revenue_stats():
+    """Thống kê doanh thu và món bán chạy cho chủ quán (SRS FR-47, FR-48).
+    Doanh thu và món bán chạy chỉ tính đơn Hoàn thành. Ngày tính theo giờ Việt Nam.
+    Tham số: shop_id; range = today | 7d | 30d | month, hoặc from/to (YYYY-MM-DD); group = day | month."""
+    u = login_required("owner", "admin")
+    try:
+        shop_id = int(request.args.get("shop_id", ""))
+    except ValueError:
+        return jsonify(error="shop_id không hợp lệ."), 400
+    group = request.args.get("group", "day")
+    if group not in ("day", "month"):
+        return jsonify(error="group phải là day hoặc month."), 400
+    today = datetime.now(VN_TZ).date()
+    try:
+        if request.args.get("from") or request.args.get("to"):
+            start = datetime.fromisoformat(request.args.get("from", "")).date()
+            end = datetime.fromisoformat(request.args.get("to", "")).date()
+        else:
+            preset = request.args.get("range", "today")
+            if preset not in REVENUE_PRESETS:
+                return jsonify(error="range không hợp lệ."), 400
+            start = {
+                "today": today,
+                "7d": today - timedelta(days=6),
+                "30d": today - timedelta(days=29),
+                "month": today.replace(day=1),
+            }[preset]
+            end = today
+    except ValueError:
+        return jsonify(error="Ngày không hợp lệ, dùng dạng YYYY-MM-DD."), 400
+    if start > end or (end - start).days + 1 > MAX_RANGE_DAYS:
+        return jsonify(error=f"Khoảng ngày không hợp lệ (tối đa {MAX_RANGE_DAYS} ngày)."), 400
+
+    lo, hi = start.isoformat(), end.isoformat()
+    day = "date(o.created_at, '+7 hours')"                 # created_at lưu theo UTC, đổi sang giờ Việt Nam
+    key = "strftime('%Y-%m', o.created_at, '+7 hours')" if group == "month" else day
+    where = f"o.shop_id = ? AND {day} BETWEEN ? AND ?"
+    args = (shop_id, lo, hi)
+    with db() as c:
+        shop = c.execute("SELECT owner_id FROM shops WHERE id = ?", (shop_id,)).fetchone()
+        if not shop:
+            abort(404)
+        if u["role"] == "owner" and shop["owner_id"] != u["id"]:
+            abort(403)
+        totals = {r["status"]: r for r in c.execute(
+            f"SELECT o.status, COUNT(*) AS n, COALESCE(SUM(o.total_amount), 0) AS amt "
+            f"FROM orders o WHERE {where} GROUP BY o.status", args).fetchall()}
+        got = {r["k"]: r for r in c.execute(
+            f"SELECT {key} AS k, COUNT(*) AS n, COALESCE(SUM(o.total_amount), 0) AS amt "
+            f"FROM orders o WHERE {where} AND o.status = 'COMPLETED' GROUP BY k", args).fetchall()}
+        ranking = c.execute(
+            f"""SELECT oi.dish_id, d.name, SUM(oi.quantity) AS qty, SUM(oi.quantity * oi.unit_price) AS amt
+                FROM order_items oi
+                JOIN orders o ON o.id = oi.order_id
+                JOIN dishes d ON d.id = oi.dish_id
+                WHERE {where} AND o.status = 'COMPLETED'
+                GROUP BY oi.dish_id
+                ORDER BY qty DESC, amt DESC, d.name
+                LIMIT 20""", args).fetchall()
+        live = {r["status"]: r["n"] for r in c.execute(
+            "SELECT status, COUNT(*) AS n FROM orders WHERE shop_id = ? "
+            "AND status IN ('PENDING', 'CONFIRMED', 'PREPARING') GROUP BY status", (shop_id,)).fetchall()}
+
+    done = totals.get("COMPLETED")
+    completed = done["n"] if done else 0
+    revenue = done["amt"] if done else 0
+    series = []
+    for k in bucket_keys(start, end, group):
+        p = got.get(k)
+        series.append({"key": k, "completed": p["n"] if p else 0, "revenue": p["amt"] if p else 0})
+    return jsonify({
+        "from": lo,
+        "to": hi,
+        "group": group,
+        "summary": {
+            "orders": sum(r["n"] for r in totals.values()),
+            "completed": completed,
+            "cancelled": totals["CANCELLED"]["n"] if "CANCELLED" in totals else 0,
+            "revenue": revenue,
+            "average": revenue // completed if completed else 0,
+        },
+        # Đơn đang chờ hoặc đang làm tính trên mọi ngày, không chỉ trong khoảng đã chọn
+        "now": {
+            "pending": live.get("PENDING", 0),
+            "working": live.get("CONFIRMED", 0) + live.get("PREPARING", 0),
+        },
+        "series": series,
+        "dishes": [{"dish_id": r["dish_id"], "name": r["name"], "quantity": r["qty"], "revenue": r["amt"]}
+                   for r in ranking],
+    })
+
+
 @app.put("/api/orders/<int:id>/status")
 def update_order_status(id):
     u = login_required("owner", "admin")

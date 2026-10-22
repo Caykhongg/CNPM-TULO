@@ -1,26 +1,190 @@
-<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Doanh thu - QuickOrder</title><link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="../css/style.css"><script src="../js/app.js"></script></head><body>
+<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Doanh thu - QuickOrder</title><link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="../css/style.css"><script src="../js/app.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+<style>
+  .tools{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between;margin:14px 0 6px}
+  .custom{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0 0}
+  .custom input{width:auto;min-width:150px}
+  .custom span{color:var(--muted);font-size:14px}
+  .period{color:var(--muted);font-size:13px;margin:10px 0 14px}
+  .panel{margin-top:16px}
+  .panel h2{font-size:17px;margin:0 0 12px}
+  .chart-box{position:relative;height:300px}
+  .scroll{overflow-x:auto;margin-top:12px}
+  .t{width:100%;border-collapse:collapse;font-size:14px}
+  .t th,.t td{padding:9px 8px;border-bottom:1px solid var(--line);text-align:left}
+  .t th{color:var(--muted);font-weight:600;font-size:13px}
+  .t .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  details{margin-top:14px}
+  summary{cursor:pointer;color:var(--pri-d);font-weight:600;font-size:14px}
+</style>
+</head><body>
 <div class="wrap">
   <h1>Doanh thu</h1>
-  <p class="sub">Thống kê doanh thu theo ngày, tháng và món bán chạy.</p>
-  <div class="chips" id="range">
-    <button class="chip on" data-r="today">Hôm nay</button>
-    <button class="chip" data-r="7d">7 ngày</button>
-    <button class="chip" data-r="month">Tháng này</button>
+  <p class="sub">Chỉ tính đơn đã hoàn thành. Ngày tính theo giờ Việt Nam.</p>
+  <div id="top"></div>
+  <div class="tools">
+    <div class="chips" id="range" aria-label="Khoảng thời gian">
+      <button type="button" class="chip on" data-r="today">Hôm nay</button>
+      <button type="button" class="chip" data-r="7d">7 ngày</button>
+      <button type="button" class="chip" data-r="30d">30 ngày</button>
+      <button type="button" class="chip" data-r="month">Tháng này</button>
+    </div>
+    <div class="chips" id="group" aria-label="Nhóm theo">
+      <button type="button" class="chip on" data-g="day">Theo ngày</button>
+      <button type="button" class="chip" data-g="month">Theo tháng</button>
+    </div>
   </div>
-  <div class="stats">
+  <div class="custom">
+    <span>Khoảng khác:</span>
+    <input type="date" id="from" aria-label="Từ ngày">
+    <span>đến</span>
+    <input type="date" id="to" aria-label="Đến ngày">
+    <button type="button" class="btn ghost sm" id="apply">Xem</button>
+  </div>
+  <div class="period" id="period"></div>
+  <div class="stats" id="stats">
     <div class="stat"><small>Doanh thu</small><b>—</b></div>
-    <div class="stat"><small>Số đơn</small><b>—</b></div>
+    <div class="stat"><small>Đơn hoàn thành</small><b>—</b></div>
     <div class="stat"><small>Giá trị đơn trung bình</small><b>—</b></div>
   </div>
-  <div class="shell">
-    <b>Chưa có dữ liệu doanh thu</b><br>Biểu đồ doanh thu và danh sách món bán chạy sẽ hiện khi có dữ liệu đơn hàng.
+
+  <div class="card panel">
+    <h2 id="chart-title">Doanh thu theo ngày</h2>
+    <div class="chart-box"><canvas id="chart" role="img" aria-label="Biểu đồ cột doanh thu theo kỳ"></canvas></div>
+    <p class="meta" id="chart-note" hidden>Không tải được thư viện biểu đồ. Bảng số liệu bên dưới vẫn đầy đủ.</p>
+    <details>
+      <summary>Xem bảng số liệu theo kỳ</summary>
+      <div class="scroll" id="table"></div>
+    </details>
   </div>
+
+  <h2 style="margin-top:24px">Món bán chạy</h2>
+  <div class="card" id="dishes"></div>
+  <p class="meta" style="margin-top:8px">Xếp theo số lượng bán trong khoảng đã chọn, tối đa 20 món.</p>
 </div>
 <script>
 QO.header('merchant');
-(async () => { await QO.requireOwner(); })();
-document.getElementById('range').onclick = e => {
-  const b = e.target.closest('[data-r]'); if (!b) return;
-  document.querySelectorAll('#range .chip').forEach(x => x.classList.toggle('on', x === b));
-};
+(async () => {
+  await QO.requireOwner();
+  const wrap = document.querySelector('.wrap');
+  const shop = await QO.myShop();
+  if (!shop) {
+    wrap.insertAdjacentHTML('beforeend', '<div class="empty"><b>Bạn chưa tạo quán</b><a class="btn" href="shop.html">Tạo quán</a></div>');
+    return;
+  }
+
+  const $ = id => document.getElementById(id);
+  const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const fromEl = $('from'), toEl = $('to');
+  let range = 'today', group = 'day', custom = false, chart = null, seq = 0;
+
+  // Nhãn kỳ: "22/10" theo ngày, "10/2026" theo tháng. Ngày dạng YYYY-MM-DD đổi sang DD/MM/YYYY.
+  const label = (k, g) => g === 'month' ? `${k.slice(5, 7)}/${k.slice(0, 4)}` : `${k.slice(8, 10)}/${k.slice(5, 7)}`;
+  const dmy = iso => iso.split('-').reverse().join('/');
+
+  const mark = () => {
+    document.querySelectorAll('#range .chip').forEach(b => b.classList.toggle('on', !custom && b.dataset.r === range));
+    document.querySelectorAll('#group .chip').forEach(b => b.classList.toggle('on', b.dataset.g === group));
+  };
+
+  const render = d => {
+    const s = d.summary;
+    $('period').textContent = `Khoảng: ${dmy(d.from)}${d.from === d.to ? '' : ' – ' + dmy(d.to)} · ${s.orders} đơn trong kỳ, ${s.cancelled} đơn đã hủy`;
+    $('stats').innerHTML = `
+      <div class="stat"><small>Doanh thu</small><b>${QO.money(s.revenue)}</b></div>
+      <div class="stat"><small>Đơn hoàn thành</small><b>${s.completed}</b></div>
+      <div class="stat"><small>Giá trị đơn trung bình</small><b>${s.completed ? QO.money(s.average) : '—'}</b></div>`;
+
+    $('chart-title').textContent = d.group === 'month' ? 'Doanh thu theo tháng' : 'Doanh thu theo ngày';
+    const labels = d.series.map(p => label(p.key, d.group));
+    $('chart-note').hidden = !!window.Chart;
+    if (window.Chart) {
+      if (chart) chart.destroy();
+      chart = new Chart($('chart'), {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Doanh thu',
+            data: d.series.map(p => p.revenue),
+            backgroundColor: css('--pri'),
+            borderRadius: 4,
+            borderSkipped: 'bottom',
+            maxBarThickness: 40,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                title: items => items.length ? (d.group === 'month' ? `Tháng ${labels[items[0].dataIndex]}` : labels[items[0].dataIndex]) : '',
+                label: c => `${QO.money(c.parsed.y)} · ${d.series[c.dataIndex].completed} đơn`,
+              },
+            },
+          },
+          scales: {
+            x: { grid: { display: false }, ticks: { color: css('--muted') } },
+            y: {
+              beginAtZero: true,
+              grid: { color: css('--line') },
+              ticks: { color: css('--muted'), callback: v => Number(v).toLocaleString('vi-VN') },
+            },
+          },
+        },
+      });
+    }
+
+    // Bảng số liệu: cùng dữ liệu với biểu đồ, dùng để đọc số chính xác và cho người không xem được biểu đồ
+    $('table').innerHTML = `<table class="t"><thead><tr>
+        <th>${d.group === 'month' ? 'Tháng' : 'Ngày'}</th><th class="num">Đơn hoàn thành</th><th class="num">Doanh thu</th>
+      </tr></thead><tbody>${d.series.map((p, i) => `<tr>
+        <td>${labels[i]}</td><td class="num">${p.completed}</td><td class="num">${QO.money(p.revenue)}</td>
+      </tr>`).join('')}</tbody></table>`;
+
+    $('dishes').innerHTML = d.dishes.length
+      ? `<div class="scroll" style="margin-top:0"><table class="t"><thead><tr>
+          <th>#</th><th>Món</th><th class="num">Số lượng</th><th class="num">Doanh thu</th>
+        </tr></thead><tbody>${d.dishes.map((x, i) => `<tr>
+          <td>${i + 1}</td><td>${QO.esc(x.name)}</td><td class="num">${x.quantity}</td><td class="num">${QO.money(x.revenue)}</td>
+        </tr>`).join('')}</tbody></table></div>`
+      : '<div class="empty"><b>Chưa có món bán ra trong kỳ này</b>Món trong các đơn đã hoàn thành sẽ được xếp hạng ở đây.</div>';
+  };
+
+  // Chỉ hiển thị kết quả của yêu cầu mới nhất, để bấm nhanh không bị kết quả cũ ghi đè
+  const load = async () => {
+    const my = ++seq;
+    const q = new URLSearchParams({ shop_id: shop.id, group });
+    if (custom) { q.set('from', fromEl.value); q.set('to', toEl.value); }
+    else q.set('range', range);
+    try {
+      const d = await QO.api('GET', 'revenue?' + q.toString());
+      if (my !== seq) return;
+      $('top').innerHTML = '';
+      render(d);
+    } catch (err) {
+      if (my === seq) $('top').innerHTML = `<div class="err" style="margin-bottom:12px">${QO.esc(err.message)}</div>`;
+    }
+  };
+
+  $('range').onclick = e => {
+    const b = e.target.closest('[data-r]'); if (!b) return;
+    range = b.dataset.r; custom = false; mark(); load();
+  };
+  $('group').onclick = e => {
+    const b = e.target.closest('[data-g]'); if (!b) return;
+    group = b.dataset.g; mark(); load();
+  };
+  $('apply').onclick = () => {
+    if (!fromEl.value || !toEl.value) { QO.toast('Chọn đủ ngày bắt đầu và kết thúc'); return; }
+    custom = true; mark(); load();
+  };
+
+  // "Hôm nay" và "Tháng này" thay đổi theo thời gian, nên làm mới mỗi phút khi đang xem khoảng có sẵn
+  setInterval(() => { if (!document.hidden && !custom) load(); }, 60000);
+  mark();
+  await load();
+})();
 </script></body></html>
