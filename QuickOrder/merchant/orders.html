@@ -42,6 +42,7 @@ QO.header('merchant');
       </div>
       <ul style="margin:10px 0;padding-left:18px">${items}</ul>
       ${o.note ? `<div class="meta" style="margin-bottom:8px">Ghi chú: ${QO.esc(o.note)}</div>` : ''}
+      ${o.status === 'CANCELLED' && o.cancel_reason ? `<div class="meta" style="margin-bottom:8px">Lý do hủy: ${QO.esc(o.cancel_reason)}</div>` : ''}
       <div class="row" style="margin-top:8px">
         <div class="meta">${QO.PAY_METHOD[o.payment_method] || ''} · ${paid ? 'Đã thanh toán' : 'Chưa thanh toán'} · <b class="price">${QO.money(o.total_amount)}</b></div>
         <div class="acts">${acts}${pay}</div>
@@ -66,11 +67,16 @@ QO.header('merchant');
     const st = e.target.closest('[data-status]'), pb = e.target.closest('[data-pay]');
     const btn = st || pb;
     if (!btn || busy) return;
-    if (st && st.dataset.status === 'CANCELLED' && !confirm('Hủy đơn này? Khách sẽ thấy đơn đã hủy.')) return;
+    // Hủy đơn bắt buộc có lý do (SRS), lý do được lưu và khách sẽ thấy
+    let reason = '';
+    if (st && st.dataset.status === 'CANCELLED') {
+      reason = (prompt('Lý do hủy đơn này (khách sẽ thấy lý do):') || '').trim();
+      if (!reason) return;
+    }
     busy = true; btn.disabled = true;
     try {
       const o = st
-        ? await QO.api('PUT', `orders/${btn.dataset.id}/status`, {status: st.dataset.status})
+        ? await QO.api('PUT', `orders/${btn.dataset.id}/status`, {status: st.dataset.status, reason})
         : await QO.api('PUT', `orders/${btn.dataset.id}/payment`, {payment_status: pb.dataset.pay});
       orders = orders.map(x => x.id === o.id ? o : x);
       QO.toast(st ? `Đơn #${o.id}: ${QO.ORDER_STATUS[o.status][0]}` : `Đơn #${o.id}: ${o.payment_status === 'PAID' ? 'đã thanh toán' : 'chưa thanh toán'}`);
@@ -86,7 +92,7 @@ QO.header('merchant');
   const tick = async () => {
     if (busy || document.hidden) return;
     try {
-      const [list, tables] = await Promise.all([QO.api('GET', 'orders?shop_id=' + shop.id), QO.by('tables', 'shop_id', shop.id)]);
+      const [list, tables] = await Promise.all([QO.api('GET', 'orders?shop_id=' + shop.id + '&limit=200'), QO.by('tables', 'shop_id', shop.id)]);
       tableNo = Object.fromEntries(tables.map(t => [t.id, t.table_number]));
       const ids = new Set(list.map(o => o.id));
       if (seen) {

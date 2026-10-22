@@ -12,7 +12,7 @@ QO.header('merchant');
   const shop = await QO.myShop();
   if (!shop) { body.innerHTML = '<div class="empty"><b>Bạn chưa tạo quán</b><a class="btn" href="shop.html">Tạo quán</a></div>'; return; }
 
-  const [dishes, tables, orders] = await Promise.all([QO.by('dishes', 'shop_id', shop.id), QO.by('tables', 'shop_id', shop.id), QO.api('GET', 'orders?shop_id=' + shop.id)]);
+  const [dishes, tables, orders] = await Promise.all([QO.by('dishes', 'shop_id', shop.id), QO.by('tables', 'shop_id', shop.id), QO.api('GET', 'orders?shop_id=' + shop.id + '&limit=200')]);
   const live = dishes.filter(d => !d.is_deleted), onSale = live.filter(d => d.is_available).length;
   const [label, tone] = QO.STATUS[shop.status];
   const note = shop.status === 'APPROVED' ? '' : `<div class="shell" style="margin-bottom:20px"><b>Quán chưa mở cho khách</b><br>${shop.status === 'PENDING' ? 'Đang chờ quản trị viên duyệt.' : 'Ghi chú từ quản trị: ' + QO.esc(shop.status_note)}</div>`;
