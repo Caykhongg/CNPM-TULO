@@ -1,21 +1,16 @@
-import hashlib
 import os
 import posixpath
-import re
 import secrets
 import sqlite3
 import time
 from contextlib import contextmanager
-from datetime import datetime, timedelta, timezone
 
 from flask import Flask, abort, g, jsonify, request, send_from_directory, session
 from werkzeug.exceptions import HTTPException
 from werkzeug.security import check_password_hash, generate_password_hash
 
-import mailer
-
 BASE = os.path.dirname(os.path.abspath(__file__))
-DB = os.environ.get("QO_DB") or os.path.join(BASE, "database.db")   # QO_DB: dùng khi chạy kiểm thử
+DB = os.path.join(BASE, "database.db")
 PUBLIC = ("customer/", "merchant/", "admin/", "css/", "js/")   # chỉ phục vụ các thư mục này
 
 app = Flask(__name__, static_folder=None)
@@ -54,15 +49,6 @@ ITEMS = ("dishes", "optionGroups", "options")
 # Khóa tạm đăng nhập theo email: 5 lần sai thì chặn 15 phút (lưu trong bộ nhớ, khởi động lại thì mất)
 LOGIN_FAILS = {}
 MAX_FAILS, LOCK_SECONDS = 5, 15 * 60
-# Xác nhận email khi khách đăng ký tài khoản
-EMAIL_RE = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
-PHONE_RE = re.compile(r"\+?\d{9,11}")
-CODE_TTL = 10 * 60          # mã có hiệu lực 10 phút
-CODE_MAX_TRIES = 5          # nhập sai 5 lần thì phải xin mã mới
-RESEND_WAIT = 60            # hai lần gửi mã cách nhau tối thiểu 60 giây
-MAX_SENDS_PER_HOUR = 5      # mỗi email tối đa 5 lần gửi mã trong 1 giờ
-SENT_MSG = "Nếu email chưa có tài khoản, mã xác nhận 6 số đã được gửi tới email này. Mã có hiệu lực 10 phút."
-BAD_CODE = "Mã xác nhận không đúng hoặc đã hết hạn."
 MSG = {400: "Dữ liệu không hợp lệ.", 401: "Bạn cần đăng nhập.",
        403: "Bạn không có quyền thực hiện thao tác này.", 404: "Không tìm thấy dữ liệu.",
        405: "Thao tác này không được phép.", 415: "Dữ liệu gửi lên phải là JSON."}
@@ -80,20 +66,9 @@ def db():
         c.close()
 
 
-# Cột thêm cho bảng orders sau khi đã có CSDL. CSDL cũ được bổ sung cột khi khởi động.
-NEW_ORDER_COLUMNS = {
-    "access_hash": "TEXT NOT NULL DEFAULT ''",
-    "cancel_reason": "TEXT NOT NULL DEFAULT ''",
-}
-
-
 def init_db():
     with db() as c, open(os.path.join(BASE, "schema.sql"), encoding="utf-8") as f:
         c.executescript(f.read())
-        have = columns(c, "orders")
-        for name, decl in NEW_ORDER_COLUMNS.items():
-            if name not in have:
-                c.execute(f"ALTER TABLE orders ADD COLUMN {name} {decl}")
 
 
 def columns(c, table):
@@ -130,17 +105,6 @@ def json_body():
     if not isinstance(d, dict):
         abort(400)
     return d
-
-
-def profile_fields(d):
-    """Họ tên và số điện thoại của khách. Trả về (dict, None) nếu hợp lệ, hoặc (None, thông báo lỗi)."""
-    name = text(d, "full_name")
-    phone = re.sub(r"[\s.-]", "", text(d, "phone"))
-    if not name or len(name) > 100:
-        return None, "Vui lòng nhập họ tên (tối đa 100 ký tự)."
-    if not PHONE_RE.fullmatch(phone):
-        return None, "Số điện thoại không hợp lệ (9 đến 11 chữ số)."
-    return {"full_name": name, "phone": phone}, None
 
 
 def current_user():
@@ -315,129 +279,6 @@ def whoami():
     return jsonify(out(login_required()))
 
 
-@app.put("/api/me")
-def update_me():
-    """Khách (hoặc chủ quán) sửa họ tên và số điện thoại của chính mình. Không đổi được email hay vai trò."""
-    u = login_required()
-    fields, err = profile_fields(json_body())
-    if err:
-        return jsonify(error=err), 400
-    with db() as c:
-        c.execute("UPDATE users SET full_name = ?, phone = ? WHERE id = ?",
-                  (fields["full_name"], fields["phone"], u["id"]))
-        row = c.execute("SELECT * FROM users WHERE id = ?", (u["id"],)).fetchone()
-    return jsonify(out(row))
-
-
-# ---------- Tài khoản khách: đăng ký có xác nhận email ----------
-def start_code(c, email, base, now):
-    """Tạo mã 6 số mới cho email, lưu hash vào pending_signups. Trả về (mã, None) hoặc (None, lỗi).
-    base: họ tên, số điện thoại, hash mật khẩu. Kiểm tra thời gian chờ và số lần gửi trong 1 giờ."""
-    old = c.execute("SELECT * FROM pending_signups WHERE email = ?", (email,)).fetchone()
-    if old and now - old["last_sent_at"] < RESEND_WAIT:
-        wait = RESEND_WAIT - (now - old["last_sent_at"])
-        return None, f"Vui lòng đợi {wait} giây rồi gửi lại."
-    in_hour = bool(old) and now - old["window_start"] < 3600
-    window_start = old["window_start"] if in_hour else now
-    sent = old["sent_in_window"] if in_hour else 0
-    if sent >= MAX_SENDS_PER_HOUR:
-        return None, "Đã gửi quá nhiều mã cho email này. Thử lại sau 1 giờ."
-    code = f"{secrets.randbelow(10 ** 6):06d}"
-    c.execute(
-        "INSERT OR REPLACE INTO pending_signups (email, full_name, phone, password_hash, code_hash, "
-        "expires_at, tries, last_sent_at, window_start, sent_in_window) VALUES (?,?,?,?,?,?,0,?,?,?)",
-        (email, base["full_name"], base["phone"], base["password_hash"], generate_password_hash(code),
-         now + CODE_TTL, now, window_start, sent + 1),
-    )
-    return code, None
-
-
-def send_code_or_error(email, code):
-    """Gửi mã qua email. Trả về phản hồi lỗi nếu gửi thất bại, hoặc None nếu thành công."""
-    try:
-        mailer.send_code(email, code)
-    except mailer.MailError as e:
-        return jsonify(error=str(e)), 502
-    return None
-
-
-@app.post("/api/customer/signup")
-def customer_signup():
-    d = json_body()
-    email = text(d, "email").lower()
-    pw = str(d.get("password") or "")
-    fields, err = profile_fields(d)
-    if err:
-        return jsonify(error=err), 400
-    if not EMAIL_RE.fullmatch(email) or len(pw) < 8:          # NFR-10: mật khẩu tối thiểu 8 ký tự
-        return jsonify(error="Email không hợp lệ hoặc mật khẩu dưới 8 ký tự."), 400
-    now = int(time.time())
-    with db() as c:
-        c.execute("DELETE FROM pending_signups WHERE expires_at < ?", (now - 3600,))   # dọn đăng ký đã bỏ dở
-        if c.execute("SELECT 1 FROM users WHERE email = ?", (email,)).fetchone():
-            return jsonify(message=SENT_MSG), 200      # không tiết lộ email đã có tài khoản hay chưa
-        base = {**fields, "password_hash": generate_password_hash(pw)}
-        code, err = start_code(c, email, base, now)
-        if err:
-            return jsonify(error=err), 429
-    failed = send_code_or_error(email, code)
-    if failed:
-        return failed
-    return jsonify(message=SENT_MSG)
-
-
-@app.post("/api/customer/resend")
-def customer_resend():
-    email = text(json_body(), "email").lower()
-    now = int(time.time())
-    with db() as c:
-        p = c.execute("SELECT * FROM pending_signups WHERE email = ?", (email,)).fetchone()
-        if not p:
-            return jsonify(message=SENT_MSG), 200
-        base = {"full_name": p["full_name"], "phone": p["phone"], "password_hash": p["password_hash"]}
-        code, err = start_code(c, email, base, now)
-        if err:
-            return jsonify(error=err), 429
-    failed = send_code_or_error(email, code)
-    if failed:
-        return failed
-    return jsonify(message=SENT_MSG)
-
-
-@app.post("/api/customer/verify")
-def customer_verify():
-    d = json_body()
-    email = text(d, "email").lower()
-    code = re.sub(r"\s", "", str(d.get("code") or ""))
-    if not re.fullmatch(r"\d{6}", code):
-        return jsonify(error=BAD_CODE), 400
-    now = int(time.time())
-    with db() as c:
-        p = c.execute("SELECT * FROM pending_signups WHERE email = ?", (email,)).fetchone()
-        if not p:
-            return jsonify(error=BAD_CODE), 400
-        if now > p["expires_at"]:
-            c.execute("DELETE FROM pending_signups WHERE email = ?", (email,))
-            return jsonify(error="Mã đã hết hạn. Bấm gửi lại mã để nhận mã mới."), 400
-        if p["tries"] >= CODE_MAX_TRIES:
-            return jsonify(error="Nhập sai quá nhiều lần. Bấm gửi lại mã để nhận mã mới."), 429
-        if not check_password_hash(p["code_hash"], code):
-            c.execute("UPDATE pending_signups SET tries = tries + 1 WHERE email = ?", (email,))
-            return jsonify(error=BAD_CODE), 400
-        if c.execute("SELECT 1 FROM users WHERE email = ?", (email,)).fetchone():
-            c.execute("DELETE FROM pending_signups WHERE email = ?", (email,))
-            return jsonify(error="Email này đã có tài khoản. Hãy đăng nhập."), 409
-        cur = c.execute(
-            "INSERT INTO users (full_name, email, phone, password_hash, role) VALUES (?,?,?,?,'customer')",
-            (p["full_name"], email, p["phone"], p["password_hash"]),
-        )
-        c.execute("DELETE FROM pending_signups WHERE email = ?", (email,))
-        row = c.execute("SELECT * FROM users WHERE id = ?", (cur.lastrowid,)).fetchone()
-    session.clear()
-    session["uid"] = row["id"]
-    return jsonify(out(row)), 201
-
-
 # ---------- CRUD chung ----------
 @app.get("/api/<name>")
 def list_rows(name):
@@ -575,56 +416,6 @@ def qr_lookup(token):
 
 # ---------- Đơn hàng ----------
 ORDER_STATUSES = ("PENDING", "CONFIRMED", "PREPARING", "COMPLETED", "CANCELLED")
-# Chuyển trạng thái theo SRS (Phụ lục B). CONFIRMED chỉ còn trong dữ liệu cũ, không được chọn làm trạng thái mới.
-ORDER_TRANSITIONS = {
-    "PENDING": {"PREPARING", "CANCELLED"},
-    "CONFIRMED": {"PREPARING", "COMPLETED", "CANCELLED"},
-    "PREPARING": {"COMPLETED", "CANCELLED"},
-}
-MAX_ORDER_ITEMS = 30   # số dòng món trong một đơn
-MAX_QTY = 50           # số phần của một món trong một đơn
-MAX_NOTE = 300
-MAX_NAME = 60
-VN_TZ = timezone(timedelta(hours=7))   # giờ Việt Nam, cố định UTC+7 (không có giờ mùa hè)
-
-
-def token_hash(token):
-    return hashlib.sha256(token.encode("utf-8")).hexdigest()
-
-
-def order_token_ok(order, token):
-    """Mã đơn do server cấp lúc đặt món. Server chỉ lưu hash và so sánh bằng hàm an toàn."""
-    if not token or not order["access_hash"]:
-        return False
-    return secrets.compare_digest(order["access_hash"], token_hash(token))
-
-
-def owns_shop(c, shop_id, user_id):
-    return c.execute("SELECT 1 FROM shops WHERE id = ? AND owner_id = ?", (shop_id, user_id)).fetchone() is not None
-
-
-def can_view_order(c, order, token):
-    """Khách có mã đơn, hoặc chủ quán của đơn đó (hoặc admin) đang đăng nhập."""
-    u = current_user()
-    if u and (u["role"] == "admin" or (u["role"] == "owner" and owns_shop(c, order["shop_id"], u["id"]))):
-        return True
-    return order_token_ok(order, token)
-
-
-def minutes_of(hhmm):
-    h, m = str(hhmm).split(":")
-    return int(h) * 60 + int(m)
-
-
-def shop_is_open(shop, now=None):
-    """Kiểm tra giờ mở cửa ở server, cùng quy tắc với isOpenNow ở giao diện (có qua nửa đêm)."""
-    try:
-        open_at, close_at = minutes_of(shop["open_time"]), minutes_of(shop["close_time"])
-    except (TypeError, ValueError):
-        return True                            # quán chưa khai báo giờ thì không chặn
-    now = now or datetime.now(VN_TZ)
-    n = now.hour * 60 + now.minute
-    return (open_at <= n < close_at) if open_at <= close_at else (n >= open_at or n < close_at)
 
 
 def order_json(c, order_id):
@@ -638,57 +429,7 @@ def order_json(c, order_id):
         (order_id,),
     ).fetchall()
     result = out(order)
-    result.pop("access_hash", None)            # không bao giờ trả mã băm của đơn ra ngoài
     result["items"] = [out(item) for item in items]
-    return result
-
-
-def pick_options(c, dish_id, option_ids):
-    """Kiểm tra tùy chọn khách chọn có thuộc món và đúng quy tắc từng nhóm không.
-    Trả về (danh sách tùy chọn đã chọn, None) hoặc (None, thông báo lỗi)."""
-    groups = c.execute(
-        "SELECT id, name, is_required, is_multiple FROM option_groups WHERE dish_id = ?",
-        (dish_id,),
-    ).fetchall()
-    opts = c.execute(
-        """SELECT o.id, o.group_id, o.name, o.extra_price FROM options o
-           JOIN option_groups g ON g.id = o.group_id WHERE g.dish_id = ?""",
-        (dish_id,),
-    ).fetchall()
-    by_id = {o["id"]: o for o in opts}
-    if any(i not in by_id for i in option_ids):
-        return None, "Tùy chọn không thuộc món này."
-    chosen = [by_id[i] for i in sorted(option_ids)]
-    for g in groups:
-        n = sum(1 for o in chosen if o["group_id"] == g["id"])
-        if g["is_required"] and n == 0:
-            return None, f'Vui lòng chọn cho nhóm "{g["name"]}".'
-        if not g["is_multiple"] and n > 1:
-            return None, f'Nhóm "{g["name"]}" chỉ được chọn một tùy chọn.'
-    return chosen, None
-
-
-def orders_json(c, rows):
-    """Chuyển nhiều đơn sang JSON, lấy món của tất cả đơn trong một truy vấn."""
-    if not rows:
-        return []
-    ids = [r["id"] for r in rows]
-    marks = ",".join("?" * len(ids))
-    items = c.execute(
-        f"""SELECT oi.*, d.name AS dish_name
-            FROM order_items oi JOIN dishes d ON d.id = oi.dish_id
-            WHERE oi.order_id IN ({marks}) ORDER BY oi.id""",
-        ids,
-    ).fetchall()
-    by_order = {}
-    for item in items:
-        by_order.setdefault(item["order_id"], []).append(out(item))
-    result = []
-    for row in rows:
-        d = out(row)
-        d.pop("access_hash", None)
-        d["items"] = by_order.get(row["id"], [])
-        result.append(d)
     return result
 
 
@@ -700,26 +441,20 @@ def create_order():
         table_id = int(d.get("table_id")) if d.get("table_id") is not None else None
     except (TypeError, ValueError):
         return jsonify(error="shop_id và table_id không hợp lệ."), 400
-    if table_id is None:
-        return jsonify(error="Đơn tại quán phải gắn với một bàn."), 400
 
     items = d.get("items")
     if not isinstance(items, list) or not items:
         return jsonify(error="Đơn hàng phải có ít nhất một món."), 400
-    if len(items) > MAX_ORDER_ITEMS:
-        return jsonify(error=f"Một đơn tối đa {MAX_ORDER_ITEMS} món."), 400
     payment_method = str(d.get("payment_method") or "CASH").upper()
     if payment_method not in ("CASH", "TRANSFER"):
         return jsonify(error="payment_method phải là CASH hoặc TRANSFER."), 400
 
     with db() as c:
         shop = c.execute(
-            "SELECT id, open_time, close_time FROM shops WHERE id = ? AND status = 'APPROVED'", (shop_id,)
+            "SELECT id FROM shops WHERE id = ? AND status = 'APPROVED'", (shop_id,)
         ).fetchone()
         if not shop:
             return jsonify(error="Quán không tồn tại hoặc chưa được duyệt."), 404
-        if not shop_is_open(shop):
-            return jsonify(error="Quán hiện không nhận đơn (ngoài giờ mở cửa)."), 409
         if table_id is not None:
             table = c.execute(
                 "SELECT id FROM shop_tables WHERE id = ? AND shop_id = ?",
@@ -734,11 +469,10 @@ def create_order():
             try:
                 dish_id = int(item.get("dish_id"))
                 quantity = int(item.get("quantity"))
-                option_ids = {int(x) for x in (item.get("option_ids") or [])}
             except (AttributeError, TypeError, ValueError):
                 return jsonify(error="Món trong đơn không hợp lệ."), 400
-            if not 1 <= quantity <= MAX_QTY:
-                return jsonify(error=f"Mỗi món đặt từ 1 đến {MAX_QTY} phần."), 400
+            if quantity <= 0:
+                return jsonify(error="Số lượng món phải lớn hơn 0."), 400
             dish = c.execute(
                 """SELECT id, price FROM dishes
                    WHERE id = ? AND shop_id = ? AND is_deleted = 0 AND is_available = 1""",
@@ -746,26 +480,16 @@ def create_order():
             ).fetchone()
             if not dish:
                 return jsonify(error=f"Món {dish_id} không tồn tại hoặc đã hết món."), 400
-            chosen, err = pick_options(c, dish_id, option_ids)
-            if err:
-                return jsonify(error=err), 400
-            # Giá một phần = giá món + giá các tùy chọn đã chọn
-            unit_price = int(dish["price"]) + sum(o["extra_price"] for o in chosen)
-            total += unit_price * quantity
-            # Tên tùy chọn ghi vào dòng món để chủ quán thấy khi chế biến
-            notes = [", ".join(o["name"] for o in chosen), str(item.get("note") or "").strip()]
-            normalized.append((dish_id, quantity, unit_price, "; ".join(n for n in notes if n)))
+            price = int(dish["price"])
+            total += price * quantity
+            normalized.append((dish_id, quantity, price, str(item.get("note") or "").strip()))
 
-        token = secrets.token_urlsafe(24)      # mã riêng của đơn: chỉ trả về một lần ở đây, server chỉ lưu hash
         cur = c.execute(
             """INSERT INTO orders
-               (shop_id, table_id, customer_name, payment_method, total_amount, note, access_hash)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (shop_id, table_id,
-             (str(d.get("customer_name") or "").strip() or "Khách tại bàn")[:MAX_NAME],
-             payment_method, total,
-             str(d.get("note") or "").strip()[:MAX_NOTE],
-             token_hash(token)),
+               (shop_id, table_id, customer_name, payment_method, total_amount, note)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (shop_id, table_id, str(d.get("customer_name") or "Khách tại bàn").strip(),
+             payment_method, total, str(d.get("note") or "").strip()),
         )
         order_id = cur.lastrowid
         c.executemany(
@@ -774,18 +498,12 @@ def create_order():
             [(order_id, dish_id, quantity, price, note)
              for dish_id, quantity, price, note in normalized],
         )
-        result = order_json(c, order_id)
-        result["access_token"] = token
-        return jsonify(result), 201
+        return jsonify(order_json(c, order_id)), 201
 
 
 @app.get("/api/orders/<int:id>")
 def get_order(id):
-    # Cần mã đơn (?token=...) hoặc đăng nhập là chủ quán của đơn. Sai thì trả 404 để không đoán được đơn có tồn tại.
     with db() as c:
-        order = c.execute("SELECT * FROM orders WHERE id = ?", (id,)).fetchone()
-        if not order or not can_view_order(c, order, request.args.get("token", "")):
-            abort(404)
         return jsonify(order_json(c, id))
 
 
@@ -809,126 +527,10 @@ def list_orders():
     if status:
         where.append("o.status = ?")
         args.append(status)
-    # Phân trang: đơn mới nhất trước. `before` là ID đơn, để lấy các đơn cũ hơn đơn đó.
-    try:
-        limit = max(1, min(int(request.args.get("limit", 100)), 200))
-        if request.args.get("before"):
-            where.append("o.id < ?")
-            args.append(int(request.args["before"]))
-    except ValueError:
-        return jsonify(error="limit hoặc before không hợp lệ."), 400
-    sql = "SELECT o.* FROM orders o" + (" WHERE " + " AND ".join(where) if where else "") + " ORDER BY o.id DESC LIMIT ?"
+    sql = "SELECT o.* FROM orders o" + (" WHERE " + " AND ".join(where) if where else "") + " ORDER BY o.id DESC"
     with db() as c:
-        rows = c.execute(sql, args + [limit]).fetchall()
-        return jsonify(orders_json(c, rows))
-
-
-REVENUE_PRESETS = ("today", "7d", "30d", "month")
-MAX_RANGE_DAYS = 366
-
-
-def bucket_keys(start, end, group):
-    """Mọi kỳ trong khoảng, kể cả kỳ không có đơn, để biểu đồ không bị hụt cột."""
-    if group == "month":
-        keys, y, m = [], start.year, start.month
-        while (y, m) <= (end.year, end.month):
-            keys.append(f"{y:04d}-{m:02d}")
-            y, m = y + m // 12, m % 12 + 1
-        return keys
-    return [(start + timedelta(days=i)).isoformat() for i in range((end - start).days + 1)]
-
-
-@app.get("/api/revenue")
-def revenue_stats():
-    """Thống kê doanh thu và món bán chạy cho chủ quán (SRS FR-47, FR-48).
-    Doanh thu và món bán chạy chỉ tính đơn Hoàn thành. Ngày tính theo giờ Việt Nam.
-    Tham số: shop_id; range = today | 7d | 30d | month, hoặc from/to (YYYY-MM-DD); group = day | month."""
-    u = login_required("owner", "admin")
-    try:
-        shop_id = int(request.args.get("shop_id", ""))
-    except ValueError:
-        return jsonify(error="shop_id không hợp lệ."), 400
-    group = request.args.get("group", "day")
-    if group not in ("day", "month"):
-        return jsonify(error="group phải là day hoặc month."), 400
-    today = datetime.now(VN_TZ).date()
-    try:
-        if request.args.get("from") or request.args.get("to"):
-            start = datetime.fromisoformat(request.args.get("from", "")).date()
-            end = datetime.fromisoformat(request.args.get("to", "")).date()
-        else:
-            preset = request.args.get("range", "today")
-            if preset not in REVENUE_PRESETS:
-                return jsonify(error="range không hợp lệ."), 400
-            start = {
-                "today": today,
-                "7d": today - timedelta(days=6),
-                "30d": today - timedelta(days=29),
-                "month": today.replace(day=1),
-            }[preset]
-            end = today
-    except ValueError:
-        return jsonify(error="Ngày không hợp lệ, dùng dạng YYYY-MM-DD."), 400
-    if start > end or (end - start).days + 1 > MAX_RANGE_DAYS:
-        return jsonify(error=f"Khoảng ngày không hợp lệ (tối đa {MAX_RANGE_DAYS} ngày)."), 400
-
-    lo, hi = start.isoformat(), end.isoformat()
-    day = "date(o.created_at, '+7 hours')"                 # created_at lưu theo UTC, đổi sang giờ Việt Nam
-    key = "strftime('%Y-%m', o.created_at, '+7 hours')" if group == "month" else day
-    where = f"o.shop_id = ? AND {day} BETWEEN ? AND ?"
-    args = (shop_id, lo, hi)
-    with db() as c:
-        shop = c.execute("SELECT owner_id FROM shops WHERE id = ?", (shop_id,)).fetchone()
-        if not shop:
-            abort(404)
-        if u["role"] == "owner" and shop["owner_id"] != u["id"]:
-            abort(403)
-        totals = {r["status"]: r for r in c.execute(
-            f"SELECT o.status, COUNT(*) AS n, COALESCE(SUM(o.total_amount), 0) AS amt "
-            f"FROM orders o WHERE {where} GROUP BY o.status", args).fetchall()}
-        got = {r["k"]: r for r in c.execute(
-            f"SELECT {key} AS k, COUNT(*) AS n, COALESCE(SUM(o.total_amount), 0) AS amt "
-            f"FROM orders o WHERE {where} AND o.status = 'COMPLETED' GROUP BY k", args).fetchall()}
-        ranking = c.execute(
-            f"""SELECT oi.dish_id, d.name, SUM(oi.quantity) AS qty, SUM(oi.quantity * oi.unit_price) AS amt
-                FROM order_items oi
-                JOIN orders o ON o.id = oi.order_id
-                JOIN dishes d ON d.id = oi.dish_id
-                WHERE {where} AND o.status = 'COMPLETED'
-                GROUP BY oi.dish_id
-                ORDER BY qty DESC, amt DESC, d.name
-                LIMIT 20""", args).fetchall()
-        live = {r["status"]: r["n"] for r in c.execute(
-            "SELECT status, COUNT(*) AS n FROM orders WHERE shop_id = ? "
-            "AND status IN ('PENDING', 'CONFIRMED', 'PREPARING') GROUP BY status", (shop_id,)).fetchall()}
-
-    done = totals.get("COMPLETED")
-    completed = done["n"] if done else 0
-    revenue = done["amt"] if done else 0
-    series = []
-    for k in bucket_keys(start, end, group):
-        p = got.get(k)
-        series.append({"key": k, "completed": p["n"] if p else 0, "revenue": p["amt"] if p else 0})
-    return jsonify({
-        "from": lo,
-        "to": hi,
-        "group": group,
-        "summary": {
-            "orders": sum(r["n"] for r in totals.values()),
-            "completed": completed,
-            "cancelled": totals["CANCELLED"]["n"] if "CANCELLED" in totals else 0,
-            "revenue": revenue,
-            "average": revenue // completed if completed else 0,
-        },
-        # Đơn đang chờ hoặc đang làm tính trên mọi ngày, không chỉ trong khoảng đã chọn
-        "now": {
-            "pending": live.get("PENDING", 0),
-            "working": live.get("CONFIRMED", 0) + live.get("PREPARING", 0),
-        },
-        "series": series,
-        "dishes": [{"dish_id": r["dish_id"], "name": r["name"], "quantity": r["qty"], "revenue": r["amt"]}
-                   for r in ranking],
-    })
+        rows = c.execute(sql, args).fetchall()
+        return jsonify([order_json(c, row["id"]) for row in rows])
 
 
 @app.put("/api/orders/<int:id>/status")
@@ -938,9 +540,6 @@ def update_order_status(id):
     status = str(d.get("status") or "").upper()
     if status not in ORDER_STATUSES:
         return jsonify(error="Trạng thái đơn không hợp lệ."), 400
-    reason = text(d, "reason")[:200]
-    if status == "CANCELLED" and not reason:
-        return jsonify(error="Vui lòng nhập lý do hủy đơn."), 400
     with db() as c:
         order = c.execute("SELECT * FROM orders WHERE id = ?", (id,)).fetchone()
         if not order:
@@ -952,51 +551,22 @@ def update_order_status(id):
             ).fetchone()
             if not owns:
                 abort(403)
-        if status not in ORDER_TRANSITIONS.get(order["status"], set()):
-            return jsonify(error=f"Không thể chuyển đơn từ {order['status']} sang {status}."), 409
-        if status == "CANCELLED":
-            c.execute("UPDATE orders SET status = ?, cancel_reason = ? WHERE id = ?", (status, reason, id))
-        else:
-            c.execute("UPDATE orders SET status = ? WHERE id = ?", (status, id))
+        if order["status"] in ("COMPLETED", "CANCELLED"):
+            return jsonify(error="Không thể sửa đơn đã kết thúc."), 409
+        c.execute("UPDATE orders SET status = ? WHERE id = ?", (status, id))
         return jsonify(order_json(c, id))
 
 
 @app.put("/api/orders/<int:id>/cancel")
 def cancel_order(id):
-    # Khách hủy bằng mã đơn đã nhận lúc đặt. Chỉ hủy được khi đơn còn đang chờ xác nhận.
     d = json_body()
     with db() as c:
-        order = c.execute("SELECT * FROM orders WHERE id = ?", (id,)).fetchone()
-        if not order or not order_token_ok(order, text(d, "token")):
+        order = c.execute("SELECT status FROM orders WHERE id = ?", (id,)).fetchone()
+        if not order:
             abort(404)
         if order["status"] != "PENDING":
             return jsonify(error="Chỉ có thể hủy đơn đang chờ xác nhận."), 409
-        c.execute("UPDATE orders SET status = 'CANCELLED', cancel_reason = ? WHERE id = ?",
-                  ("Khách hủy khi đơn đang chờ xác nhận", id))
-        return jsonify(order_json(c, id))
-
-
-@app.put("/api/orders/<int:id>/payment")
-def update_order_payment(id):
-    u = login_required("owner", "admin")
-    d = json_body()
-    payment_status = str(d.get("payment_status") or "").upper()
-    if payment_status not in ("UNPAID", "PAID"):
-        return jsonify(error="payment_status phải là UNPAID hoặc PAID."), 400
-    with db() as c:
-        order = c.execute("SELECT * FROM orders WHERE id = ?", (id,)).fetchone()
-        if not order:
-            abort(404)
-        if u["role"] == "owner":
-            owns = c.execute(
-                "SELECT 1 FROM shops WHERE id = ? AND owner_id = ?",
-                (order["shop_id"], u["id"]),
-            ).fetchone()
-            if not owns:
-                abort(403)
-        if order["status"] == "CANCELLED":
-            return jsonify(error="Đơn đã hủy không thể cập nhật thanh toán."), 409
-        c.execute("UPDATE orders SET payment_status = ? WHERE id = ?", (payment_status, id))
+        c.execute("UPDATE orders SET status = 'CANCELLED' WHERE id = ?", (id,))
         return jsonify(order_json(c, id))
 
 
