@@ -70,7 +70,7 @@ QO.header('customer');
     sum.innerHTML = `<div class="kv"><span>Số món</span><b>${count}</b></div>
       <div class="row" style="margin-top:12px"><b>Tổng cộng</b><span class="price" style="font-size:20px">${QO.money(total)}</span></div>`;
 
-    whereEl.innerHTML = tb ? `Tại bàn: <b>Bàn ${QO.esc(tb.table_number)}</b>` : 'Chưa xác định bàn. <a href="scan.html"><b>Quét lại mã QR trên bàn</b></a>';
+    whereEl.innerHTML = tb ? `Tại bàn: <b>Bàn ${QO.esc(tb.table_number)}</b>` : 'Chưa xác định bàn. Hãy dùng camera điện thoại quét lại mã QR trên bàn.';
     paysEl.innerHTML = PAYS.map(([v, t]) => `<button type="button" class="chip${method === v ? ' on' : ''}" data-pay="${v}">${t}</button>`).join('');
     renderPay();
 

@@ -52,7 +52,7 @@ QO.header('customer');
   const draw = saved => {
     chipsEl.innerHTML = FILTERS.map(([v, t]) => `<button type="button" class="chip${filter === v ? ' on' : ''}" data-f="${v}">${t}</button>`).join('');
     if (!saved.length) {
-      listEl.innerHTML = '<div class="empty"><b>Chưa có đơn hàng</b>Đơn bạn gửi từ bàn sẽ hiện ở đây.<br><br><a class="btn" href="scan.html">Quét mã QR để gọi món</a></div>';
+      listEl.innerHTML = '<div class="empty"><b>Chưa có đơn hàng</b>Đơn bạn gửi từ bàn sẽ hiện ở đây. Dùng camera điện thoại quét mã QR trên bàn để bắt đầu gọi món.</div>';
       return;
     }
     const rows = saved.map(s => ({s, o: cache.get(s.id)})).filter(({o}) => o && (!filter || bucket(o.status) === filter));

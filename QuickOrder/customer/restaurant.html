@@ -27,7 +27,7 @@ QO.header('customer');
         <span class="tag ${tone}">${label}</span>
       </div>
       <div class="meta" style="margin-top:8px">Giờ mở cửa ${QO.esc(shop.open_time)} – ${QO.esc(shop.close_time)} · ${QO.esc(shop.phone)}</div>
-      ${scanOk ? `<div class="meta" style="margin-top:6px">Bạn đang gọi món cho <b>Bàn ${QO.esc(tb.table_number)}</b>.</div>` : '<div class="err" style="margin-top:8px">Hãy quét mã QR trên bàn để gọi món. Mã cũ có thể đã được đổi. <a href="scan.html"><b>Mở camera quét mã</b></a></div>'}
+      ${scanOk ? `<div class="meta" style="margin-top:6px">Bạn đang gọi món cho <b>Bàn ${QO.esc(tb.table_number)}</b>.</div>` : '<div class="err" style="margin-top:8px">Hãy dùng camera điện thoại quét mã QR trên bàn để gọi món. Mã cũ có thể đã được đổi, hãy quét lại mã trên bàn.</div>'}
     </section>
     <div class="search" style="border:1px solid var(--line);max-width:none;margin-top:18px"><input id="q" type="search" placeholder="Tìm món trong quán..." value="${QO.esc(q)}" aria-label="Tìm món trong quán"></div>
     <div class="chips" id="chips"></div>
