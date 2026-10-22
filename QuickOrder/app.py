@@ -579,6 +579,31 @@ def order_json(c, order_id):
     return result
 
 
+def pick_options(c, dish_id, option_ids):
+    """Kiểm tra tùy chọn khách chọn có thuộc món và đúng quy tắc từng nhóm không.
+    Trả về (danh sách tùy chọn đã chọn, None) hoặc (None, thông báo lỗi)."""
+    groups = c.execute(
+        "SELECT id, name, is_required, is_multiple FROM option_groups WHERE dish_id = ?",
+        (dish_id,),
+    ).fetchall()
+    opts = c.execute(
+        """SELECT o.id, o.group_id, o.name, o.extra_price FROM options o
+           JOIN option_groups g ON g.id = o.group_id WHERE g.dish_id = ?""",
+        (dish_id,),
+    ).fetchall()
+    by_id = {o["id"]: o for o in opts}
+    if any(i not in by_id for i in option_ids):
+        return None, "Tùy chọn không thuộc món này."
+    chosen = [by_id[i] for i in sorted(option_ids)]
+    for g in groups:
+        n = sum(1 for o in chosen if o["group_id"] == g["id"])
+        if g["is_required"] and n == 0:
+            return None, f'Vui lòng chọn cho nhóm "{g["name"]}".'
+        if not g["is_multiple"] and n > 1:
+            return None, f'Nhóm "{g["name"]}" chỉ được chọn một tùy chọn.'
+    return chosen, None
+
+
 @app.post("/api/orders")
 def create_order():
     d = json_body()
@@ -615,6 +640,7 @@ def create_order():
             try:
                 dish_id = int(item.get("dish_id"))
                 quantity = int(item.get("quantity"))
+                option_ids = {int(x) for x in (item.get("option_ids") or [])}
             except (AttributeError, TypeError, ValueError):
                 return jsonify(error="Món trong đơn không hợp lệ."), 400
             if quantity <= 0:
@@ -626,9 +652,15 @@ def create_order():
             ).fetchone()
             if not dish:
                 return jsonify(error=f"Món {dish_id} không tồn tại hoặc đã hết món."), 400
-            price = int(dish["price"])
-            total += price * quantity
-            normalized.append((dish_id, quantity, price, str(item.get("note") or "").strip()))
+            chosen, err = pick_options(c, dish_id, option_ids)
+            if err:
+                return jsonify(error=err), 400
+            # Giá một phần = giá món + giá các tùy chọn đã chọn
+            unit_price = int(dish["price"]) + sum(o["extra_price"] for o in chosen)
+            total += unit_price * quantity
+            # Tên tùy chọn ghi vào dòng món để chủ quán thấy khi chế biến
+            notes = [", ".join(o["name"] for o in chosen), str(item.get("note") or "").strip()]
+            normalized.append((dish_id, quantity, unit_price, "; ".join(n for n in notes if n)))
 
         cur = c.execute(
             """INSERT INTO orders
@@ -713,6 +745,30 @@ def cancel_order(id):
         if order["status"] != "PENDING":
             return jsonify(error="Chỉ có thể hủy đơn đang chờ xác nhận."), 409
         c.execute("UPDATE orders SET status = 'CANCELLED' WHERE id = ?", (id,))
+        return jsonify(order_json(c, id))
+
+
+@app.put("/api/orders/<int:id>/payment")
+def update_order_payment(id):
+    u = login_required("owner", "admin")
+    d = json_body()
+    payment_status = str(d.get("payment_status") or "").upper()
+    if payment_status not in ("UNPAID", "PAID"):
+        return jsonify(error="payment_status phải là UNPAID hoặc PAID."), 400
+    with db() as c:
+        order = c.execute("SELECT * FROM orders WHERE id = ?", (id,)).fetchone()
+        if not order:
+            abort(404)
+        if u["role"] == "owner":
+            owns = c.execute(
+                "SELECT 1 FROM shops WHERE id = ? AND owner_id = ?",
+                (order["shop_id"], u["id"]),
+            ).fetchone()
+            if not owns:
+                abort(403)
+        if order["status"] == "CANCELLED":
+            return jsonify(error="Đơn đã hủy không thể cập nhật thanh toán."), 409
+        c.execute("UPDATE orders SET payment_status = ? WHERE id = ?", (payment_status, id))
         return jsonify(order_json(c, id))
 
 

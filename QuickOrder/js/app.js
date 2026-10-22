@@ -23,6 +23,9 @@ const QO = (() => {
   const validateSelection = (g, opts) => !(g.is_required && !opts.length) && !(!g.is_multiple && opts.length > 1); // OptionGroup.validate_selection
   const qrUrl = t => new URL('../customer/restaurant.html?id=' + t.shop_id + '&table=' + t.qr_token, location.href).href; // DiningTable.qr_url
   const STATUS = {PENDING:['Chờ duyệt','wait'], APPROVED:['Đã duyệt','ok'], REJECTED:['Bị từ chối','no'], LOCKED:['Bị khóa','no']};
+  // Trạng thái đơn theo SRS (Phụ lục B): CONFIRMED và PREPARING đều hiển thị là "Đang làm"
+  const ORDER_STATUS = {PENDING:['Chờ xác nhận','wait'], CONFIRMED:['Đang làm','ok'], PREPARING:['Đang làm','ok'], COMPLETED:['Hoàn thành','ok'], CANCELLED:['Đã hủy','no']};
+  const PAY_METHOD = {CASH:'Tiền mặt', TRANSFER:'Chuyển khoản / QR'};
 
   // ===== Tiện ích =====
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -34,6 +37,9 @@ const QO = (() => {
   const toast = m => { let t = document.getElementById('toast'); if (!t) { t = document.createElement('div'); t.id = 'toast'; document.body.appendChild(t); }
     t.textContent = m; t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 2200); };
   const param = k => new URLSearchParams(location.search).get(k);
+  // created_at do server ghi theo giờ UTC dạng "YYYY-MM-DD HH:MM:SS"
+  const parseTime = s => new Date(String(s).replace(' ', 'T') + 'Z');
+  const fmtTime = s => { const d = parseTime(s); return isNaN(d) ? '' : d.toLocaleString('vi-VN', {hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit'}); };
 
   // Đường dẫn: các trang nằm trong thư mục customer/, merchant/, admin/ phải lùi một cấp để về trang chủ
   const inSub = () => /\/(customer|merchant|admin)\//.test(location.pathname);
@@ -58,11 +64,17 @@ const QO = (() => {
   const setGuest = p => sessionStorage.setItem('qo_guest', JSON.stringify(p));
   const clearGuest = () => sessionStorage.removeItem('qo_guest');
 
+  // Danh sách đơn khách đã gửi, lưu trên thiết bị này (localStorage) để xem lại sau khi đóng tab.
+  // Mỗi mục: {id, shop_id, shop_name, table_number}. Server vẫn là nguồn chính về trạng thái đơn.
+  const getOrders = () => { try { return JSON.parse(localStorage.getItem('qo_orders')) || []; } catch { return []; } };
+  const saveOrders = list => { try { localStorage.setItem('qo_orders', JSON.stringify(list)); } catch {} };
+  const addOrder = o => saveOrders([o, ...getOrders().filter(x => x.id !== o.id)].slice(0, 30));
+
   // ===== Thanh công cụ chung =====
   // Hai khu vực của sản phẩm: "Người dùng" (khách gọi món) và "Chủ quán".
   // Mục quản lý của chủ quán chỉ hiện khi phiên đăng nhập là chủ quán.
   const SECTIONS = {
-    customer: [['customer/home.html', 'Gọi món tại bàn'], ['customer/scan.html', 'Quét QR'], ['customer/cart.html', 'Giỏ hàng'], ['customer/orders.html', 'Đơn hàng'], ['customer/profile.html', 'Hồ sơ']],
+    customer: [['customer/home.html', 'Gọi món tại bàn'], ['customer/cart.html', 'Giỏ hàng'], ['customer/orders.html', 'Đơn hàng'], ['customer/profile.html', 'Hồ sơ']],
     merchant: [['merchant/dashboard.html', 'Tổng quan'], ['merchant/orders.html', 'Đơn hàng'], ['merchant/menu.html', 'Thực đơn'], ['merchant/tables.html', 'Bàn & QR'], ['merchant/revenue.html', 'Doanh thu'], ['merchant/shop.html', 'Hồ sơ quán']]
   };
   const linkTo = ([p, t]) => `<a href="${rootUrl()}${p}"${location.pathname.endsWith('/' + p) ? ' class="on" aria-current="page"' : ''}>${t}${p === 'customer/cart.html' ? '<span class="badge-n" id="cart-n"></span>' : ''}</a>`;
@@ -110,6 +122,7 @@ const QO = (() => {
     refreshAccount();
   };
 
-  return {api, all, get, by, put, del, isOpenNow, isAccepting, isOrderable, validateSelection, qrUrl, STATUS,
-    esc, money, norm, hash, toast, param, session, logout, requireOwner, myShop, getCart, setCart, getGuest, setGuest, clearGuest, header};
+  return {api, all, get, by, put, del, isOpenNow, isAccepting, isOrderable, validateSelection, qrUrl, STATUS, ORDER_STATUS, PAY_METHOD,
+    esc, money, norm, hash, toast, param, parseTime, fmtTime, session, logout, requireOwner, myShop, getCart, setCart, getGuest, setGuest, clearGuest,
+    getOrders, saveOrders, addOrder, header};
 })();

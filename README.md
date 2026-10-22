@@ -138,7 +138,7 @@ CNPM-TULO/
 │   ├── __init__.py          # Khởi tạo Flask app
 │   ├── models.py            # Các model SQLAlchemy
 │   ├── auth/                # Đăng ký, đăng nhập, phân quyền
-│   ├── customer/            # Quét QR, menu, giỏ hàng, đơn hàng
+│   ├── customer/            # Menu, giỏ hàng, đơn hàng
 │   ├── owner/               # Quản lý quán, bàn, menu, đơn, thống kê
 │   ├── admin/               # Trang quản trị
 │   ├── api/                 # Endpoint JSON (AJAX, thông báo đơn mới)

@@ -1,12 +1,89 @@
 <!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Đơn hàng - QuickOrder</title><link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="../css/style.css"><script src="../js/app.js"></script></head><body>
 <div class="wrap">
   <h1>Đơn hàng của bạn</h1>
-  <p class="sub">Theo dõi đơn từ lúc gửi đến khi hoàn thành.</p>
-  <div class="chips" aria-label="Lọc theo trạng thái">
-    <span class="chip on">Tất cả</span><span class="chip">Chờ xác nhận</span><span class="chip">Đang làm</span><span class="chip">Đang giao</span><span class="chip">Hoàn thành</span>
-  </div>
-  <div class="empty"><b>Chưa có đơn hàng</b>Lịch sử đơn sẽ hiện ở đây. Chức năng này đang được phát triển.</div>
-  <p class="meta" style="margin-top:14px">Trạng thái đơn: Chờ xác nhận → Đang làm → Đang giao → Hoàn thành.</p>
+  <p class="sub">Trạng thái tự cập nhật. Danh sách này lưu trên thiết bị bạn đang dùng.</p>
+  <div class="chips" id="chips" aria-label="Lọc theo trạng thái"></div>
+  <div id="list" style="margin-top:14px"><div class="empty"><b>Đang tải...</b></div></div>
 </div>
-<script>QO.header('customer');</script>
+<script>
+QO.header('customer');
+(async () => {
+  const chipsEl = document.getElementById('chips'), listEl = document.getElementById('list');
+  // Nhóm trạng thái để lọc: CONFIRMED và PREPARING cùng là "Đang làm"
+  const bucket = s => ({PENDING: 'PENDING', CONFIRMED: 'WORKING', PREPARING: 'WORKING', COMPLETED: 'COMPLETED', CANCELLED: 'CANCELLED'})[s];
+  const FILTERS = [['', 'Tất cả'], ['PENDING', 'Chờ xác nhận'], ['WORKING', 'Đang làm'], ['COMPLETED', 'Hoàn thành'], ['CANCELLED', 'Đã hủy']];
+  let filter = '';
+  const cache = new Map();          // id đơn -> dữ liệu mới nhất từ server
+  let loadError = '';
+
+  // Lấy trạng thái từng đơn đã lưu. Đơn không còn trên server thì bỏ khỏi danh sách; lỗi mạng thì giữ dữ liệu cũ.
+  const load = async () => {
+    const saved = QO.getOrders();
+    const results = await Promise.all(saved.map(s => QO.get('orders', s.id).catch(() => undefined)));
+    const keep = [];
+    saved.forEach((s, i) => {
+      const r = results[i];
+      if (r === null) return;
+      keep.push(s);
+      if (r) cache.set(s.id, r);
+    });
+    if (keep.length !== saved.length) QO.saveOrders(keep);
+    loadError = results.some(r => r === undefined) ? 'Không tải được trạng thái mới nhất. Đang thử lại...' : '';
+    return keep;
+  };
+
+  const card = (s, o) => {
+    const [label, tone] = QO.ORDER_STATUS[o.status] || ['Không rõ', ''];
+    const items = o.items.map(i => `<li>${i.quantity} × ${QO.esc(i.dish_name)}${i.note ? ` <span class="meta">(${QO.esc(i.note)})</span>` : ''}</li>`).join('');
+    const pay = `${QO.PAY_METHOD[o.payment_method] || ''} · ${o.payment_status === 'PAID' ? 'Đã thanh toán' : 'Chưa thanh toán'}`;
+    const cancel = o.status === 'PENDING' ? `<div style="margin-top:10px"><button class="btn bad sm" data-cancel="${o.id}">Hủy đơn</button></div>` : '';
+    return `<article class="item" style="display:block">
+      <div class="row">
+        <div><h3>Đơn #${o.id} · ${QO.esc(s.shop_name || 'Quán')}</h3><div class="meta">Bàn ${QO.esc(s.table_number)} · ${QO.esc(QO.fmtTime(o.created_at))}</div></div>
+        <span class="tag ${tone}">${label}</span>
+      </div>
+      <ul style="margin:10px 0 6px;padding-left:18px">${items}</ul>
+      ${o.note ? `<div class="meta">Ghi chú: ${QO.esc(o.note)}</div>` : ''}
+      <div class="row" style="margin-top:8px"><span class="meta">${pay}</span><span class="price">${QO.money(o.total_amount)}</span></div>
+      ${cancel}
+    </article>`;
+  };
+
+  const draw = saved => {
+    chipsEl.innerHTML = FILTERS.map(([v, t]) => `<button type="button" class="chip${filter === v ? ' on' : ''}" data-f="${v}">${t}</button>`).join('');
+    if (!saved.length) {
+      listEl.innerHTML = '<div class="empty"><b>Chưa có đơn hàng</b>Đơn bạn gửi từ bàn sẽ hiện ở đây. Dùng camera điện thoại quét mã QR trên bàn để bắt đầu gọi món.</div>';
+      return;
+    }
+    const rows = saved.map(s => ({s, o: cache.get(s.id)})).filter(({o}) => o && (!filter || bucket(o.status) === filter));
+    const note = loadError ? `<div class="err" style="margin-bottom:12px">${QO.esc(loadError)}</div>` : '';
+    listEl.innerHTML = note + (rows.length
+      ? '<div class="list">' + rows.map(({s, o}) => card(s, o)).join('') + '</div>'
+      : '<div class="empty"><b>Không có đơn ở mục này</b></div>');
+  };
+
+  chipsEl.onclick = e => { const b = e.target.closest('[data-f]'); if (b) { filter = b.dataset.f; draw(QO.getOrders()); } };
+
+  listEl.onclick = async e => {
+    const b = e.target.closest('[data-cancel]'); if (!b) return;
+    if (!confirm('Hủy đơn này?')) return;
+    b.disabled = true;
+    try {
+      const o = await QO.api('PUT', 'orders/' + b.dataset.cancel + '/cancel', {});
+      cache.set(o.id, o);
+      QO.toast('Đã hủy đơn #' + o.id);
+    } catch (err) {
+      QO.toast(err.message);
+    }
+    draw(QO.getOrders());
+  };
+
+  const tick = async () => {
+    if (document.hidden) return;
+    draw(await load());
+  };
+  await tick();
+  setInterval(tick, 7000);
+})();
+</script>
 </body></html>
