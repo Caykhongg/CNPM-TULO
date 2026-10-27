@@ -20,6 +20,8 @@
     </aside>
   </div>
 </div>
+<dialog id="edlg"><form method="dialog"><h2 id="edn"></h2><div id="egs"></div><div class="err" id="eer"></div>
+  <div class="row" style="margin-top:12px"><button class="btn ghost" value="x">Hủy</button><button class="btn" id="eok" value="ok">Lưu</button></div></form></dialog>
 <script>
 QO.header('customer');
 (async () => {
@@ -29,6 +31,8 @@ QO.header('customer');
   const nameEl = document.querySelector('input[name="name"]'), noteEl = document.querySelector('textarea[name="note"]');
   const PAYS = [['CASH', 'Tiền mặt'], ['TRANSFER', 'Chuyển khoản / QR']];
   let shop = null, tb = null, method = 'CASH', sending = false;
+  let groups = [], opts = [], editing = null;       // nhóm và tùy chọn của các món trong giỏ, để sửa tùy chọn
+  const groupsOf = id => groups.filter(g => g.dish_id === id), optsOf = g => opts.filter(o => o.group_id === g.id);
 
   // Giá một phần = giá món + tùy chọn (khớp với giá server tính)
   const line = i => (i.price + i.options.reduce((s, o) => s + o.extra_price, 0)) * i.qty;
@@ -67,6 +71,7 @@ QO.header('customer');
           <b>${i.qty}</b>
           <button class="btn ghost sm" data-d="${QO.esc(i.key)}" data-n="1" aria-label="Tăng số lượng">+</button>
           <span class="price" style="min-width:90px;text-align:right">${QO.money(line(i))}</span>
+          ${groupsOf(i.dish_id).length ? `<button class="btn ghost sm" data-e="${QO.esc(i.key)}" aria-label="Sửa tùy chọn ${QO.esc(i.name)}">Sửa</button>` : ''}
           <button class="btn bad sm" data-x="${QO.esc(i.key)}" aria-label="Xóa ${QO.esc(i.name)} khỏi giỏ">Xóa</button>
         </div>
       </div>`).join('') + '</div><div style="margin-top:12px"><button class="btn ghost sm" type="button" id="clear">Xóa toàn bộ giỏ</button></div>';
@@ -88,6 +93,14 @@ QO.header('customer');
       if (!confirm('Xóa toàn bộ món trong giỏ?')) return;
       const c = QO.getCart(); c.items = []; QO.setCart(c); draw(); return;
     }
+    const ed = e.target.closest('[data-e]');
+    if (ed) {
+      editing = QO.getCart().items.find(x => x.key === ed.dataset.e); if (!editing) return;
+      const have = new Set(editing.options.map(o => o.id));
+      document.getElementById('edn').textContent = editing.name; document.getElementById('eer').textContent = '';
+      document.getElementById('egs').innerHTML = groupsOf(editing.dish_id).map(g => `<fieldset class="grp" style="border:0"><legend>${QO.esc(g.name)} <span class="meta">(${g.is_required ? 'bắt buộc' : 'tùy chọn'}, chọn ${g.is_multiple ? 'nhiều' : '1'})</span></legend>${optsOf(g).map(o => `<label><input type="${g.is_multiple ? 'checkbox' : 'radio'}" name="g${g.id}" value="${o.id}"${have.has(o.id) ? ' checked' : ''}> ${QO.esc(o.name)}${o.extra_price ? ` <span class="meta">(+${QO.money(o.extra_price)})</span>` : ''}</label>`).join('')}</fieldset>`).join('');
+      document.getElementById('edlg').showModal(); return;
+    }
     const rm = e.target.closest('[data-x]');
     if (rm) { const c = QO.getCart(); c.items = c.items.filter(x => x.key !== rm.dataset.x); QO.setCart(c); draw(); return; }
     const b = e.target.closest('[data-d]'); if (!b) return;
@@ -95,6 +108,20 @@ QO.header('customer');
     if (!i) return;
     i.qty += Number(b.dataset.n);
     c.items = c.items.filter(x => x.qty > 0);
+    QO.setCart(c); draw();
+  };
+  document.getElementById('eok').onclick = e => {
+    const d = document.getElementById('edlg'), picked = [];
+    for (const g of groupsOf(editing.dish_id)) {
+      const sel = optsOf(g).filter(o => d.querySelector(`[name="g${g.id}"][value="${o.id}"]`).checked);
+      if (!QO.validateSelection(g, sel)) { e.preventDefault(); document.getElementById('eer').textContent = `Vui lòng chọn đúng cho nhóm "${g.name}".`; return; }
+      picked.push(...sel);
+    }
+    const c = QO.getCart(), cur = c.items.find(x => x.key === editing.key); if (!cur) return;
+    cur.options = picked.map(o => ({id: o.id, name: o.name, extra_price: o.extra_price}));
+    cur.key = cur.dish_id + ':' + picked.map(o => o.id).sort().join(',');
+    const same = c.items.find(x => x !== cur && x.key === cur.key);          // trùng dòng khác thì gộp số lượng
+    if (same) { same.qty += cur.qty; c.items = c.items.filter(x => x !== cur); }
     QO.setCart(c); draw();
   };
   paysEl.onclick = e => { const b = e.target.closest('[data-pay]'); if (b) { method = b.dataset.pay; draw(); } };
@@ -138,6 +165,12 @@ QO.header('customer');
   const who = await QO.session();
   const profile = who && who.role === 'customer' ? who : QO.getGuest();
   if (profile && nameEl && !nameEl.value) nameEl.value = profile.full_name || '';
+
+  const dishIds = new Set(QO.getCart().items.map(i => i.dish_id));
+  try {
+    const [g, o] = await Promise.all([QO.all('optionGroups'), QO.all('options')]);
+    groups = g.filter(x => dishIds.has(x.dish_id)); const gid = new Set(groups.map(x => x.id)); opts = o.filter(x => gid.has(x.group_id));
+  } catch {}                                                                  // lỗi mạng: giỏ vẫn dùng được, chỉ không có nút Sửa
 
   draw();
 })();
