@@ -17,13 +17,15 @@ import mailer
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 DB = os.environ.get("QO_DB") or os.path.join(BASE, "database.db")   # QO_DB: dùng khi chạy kiểm thử
+UPLOAD_DIR = os.environ.get("QO_UPLOADS") or os.path.join(BASE, "uploads")   # ảnh QR thanh toán do chủ quán tải lên
+MAX_QR_BYTES = 1_000_000
 VN = timezone(timedelta(hours=7))              # quán chỉ phục vụ ở Việt Nam: giờ mở cửa và "hôm nay" tính theo UTC+7
 PUBLIC = ("customer/", "merchant/", "admin/", "css/", "js/")   # chỉ phục vụ các thư mục này
 
 app = Flask(__name__, static_folder=None)
 # Phiên đăng nhập lưu ở server (cookie đã ký). Đặt SECRET_KEY cố định để không mất phiên khi khởi động lại.
 app.secret_key = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
-app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax",
+app.config.update(MAX_CONTENT_LENGTH=2 * 1024 * 1024, SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax",
                   SESSION_COOKIE_SECURE=os.environ.get("HTTPS") == "1")   # bật khi chạy trên HTTPS
 
 # tên trong API (khớp app.js) -> (bảng SQL, cho phép ghi qua API chung?)
@@ -67,7 +69,7 @@ SENT_MSG = "Nếu email chưa có tài khoản, mã xác nhận 6 số đã đư
 BAD_CODE = "Mã xác nhận không đúng hoặc đã hết hạn."
 MSG = {400: "Dữ liệu không hợp lệ.", 401: "Bạn cần đăng nhập.",
        403: "Bạn không có quyền thực hiện thao tác này.", 404: "Không tìm thấy dữ liệu.",
-       405: "Thao tác này không được phép.", 415: "Dữ liệu gửi lên phải là JSON."}
+       405: "Thao tác này không được phép.", 413: "Dữ liệu gửi lên quá lớn.", 415: "Dữ liệu gửi lên phải là JSON."}
 
 
 @contextmanager
@@ -800,6 +802,14 @@ def list_orders():
     if before is not None:                     # trang kế tiếp: đơn cũ hơn id này
         where.append("o.id < ?")
         args.append(before)
+    frm, to = request.args.get("from"), request.args.get("to")      # lọc theo ngày (giờ Việt Nam), FR-39
+    if frm or to:
+        d1, d2 = (parse_day(frm) if frm else date(2000, 1, 1)), (parse_day(to) if to else date(2999, 12, 31))
+        if not d1 or not d2 or d1 > d2:
+            return jsonify(error="Khoảng ngày không hợp lệ (YYYY-MM-DD)."), 400
+        lo, hi = utc_bounds(d1, d2)
+        where.append("o.created_at >= ? AND o.created_at < ?")
+        args += [lo, hi]
     sql = ("SELECT o.* FROM orders o" + (" WHERE " + " AND ".join(where) if where else "")
            + " ORDER BY o.id DESC LIMIT ?")
     with db() as c:
@@ -983,6 +993,56 @@ def revenue():
     return jsonify(shop_id=shop_id, group=group, **{"from": d1.isoformat(), "to": d2.isoformat()},
                    summary=summary, now={"pending": pend["pending"], "working": pend["working"]},
                    series=series, dishes=[dict(r) for r in dishes])
+
+
+# ---------- Ảnh QR thanh toán của quán (FR-32) ----------
+def image_ext(b):
+    """Đuôi file theo nội dung thật (không tin tên file hay Content-Type do client gửi). None nếu không phải ảnh cho phép."""
+    if b.startswith(b"\x89PNG\r\n\x1a\n"):
+        return ".png"
+    if b.startswith(b"\xff\xd8\xff"):
+        return ".jpg"
+    if b[:4] == b"RIFF" and b[8:12] == b"WEBP":
+        return ".webp"
+    return None
+
+
+@app.post("/api/shops/<int:id>/qr")
+def upload_qr(id):
+    u = login_required("owner", "admin")
+    f = request.files.get("file")
+    if f is None:
+        return jsonify(error="Chưa chọn ảnh."), 400
+    data = f.read(MAX_QR_BYTES + 1)
+    if len(data) > MAX_QR_BYTES:
+        return jsonify(error="Ảnh tối đa 1 MB."), 400
+    ext = image_ext(data)
+    if not ext:
+        return jsonify(error="Chỉ nhận ảnh PNG, JPG hoặc WEBP."), 400
+    with db() as c:
+        assert_owns(c, "shops", id, u)
+        old = c.execute("SELECT payment_qr_image FROM shops WHERE id = ?", (id,)).fetchone()["payment_qr_image"] or ""
+        os.makedirs(UPLOAD_DIR, exist_ok=True)
+        name = secrets.token_hex(16) + ext             # tên ngẫu nhiên, không dùng tên file của người dùng
+        with open(os.path.join(UPLOAD_DIR, name), "wb") as out_file:
+            out_file.write(data)
+        c.execute("UPDATE shops SET payment_qr_image = ? WHERE id = ?", ("/uploads/" + name, id))
+        row = c.execute("SELECT * FROM shops WHERE id = ?", (id,)).fetchone()
+    if re.fullmatch(r"/uploads/[0-9a-f]{32}\.(png|jpg|webp)", old):      # xóa ảnh cũ của quán
+        try:
+            os.remove(os.path.join(UPLOAD_DIR, old.rsplit("/", 1)[1]))
+        except OSError:
+            pass
+    return jsonify(out(row))
+
+
+@app.get("/uploads/<name>")
+def uploaded_file(name):
+    if not re.fullmatch(r"[0-9a-f]{32}\.(png|jpg|webp)", name):
+        abort(404)
+    resp = send_from_directory(UPLOAD_DIR, name)
+    resp.headers["X-Content-Type-Options"] = "nosniff"
+    return resp
 
 
 # ---------- Trang tĩnh ----------

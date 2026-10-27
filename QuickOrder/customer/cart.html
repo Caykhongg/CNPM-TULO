@@ -37,8 +37,11 @@ QO.header('customer');
     if (method !== 'TRANSFER') { payEl.textContent = 'Thanh toán tiền mặt khi nhận món hoặc tại quầy.'; return; }
     if (!shop) { payEl.textContent = ''; return; }
     const info = shop.bank_account_number ? 'Số tài khoản: ' + QO.esc(shop.bank_account_number) : 'Quán chưa cập nhật số tài khoản.';
-    // Chỉ cho phép liên kết http(s) để tránh javascript: từ dữ liệu quán
-    const qr = /^https?:\/\//i.test(shop.payment_qr_image || '') ? ` · <a href="${QO.esc(shop.payment_qr_image)}" target="_blank" rel="noopener">Xem mã QR</a>` : '';
+    const img = shop.payment_qr_image || '';
+    // Ảnh do quán tải lên (/uploads/...) hiện ngay; chỉ cho phép liên kết http(s) để tránh javascript: từ dữ liệu quán
+    const qr = /^\/uploads\/[0-9a-f]{32}\.(png|jpg|webp)$/.test(img)
+      ? `<div style="margin-top:8px"><img src="${QO.esc(img)}" alt="Mã QR chuyển khoản của quán" style="max-width:220px;width:100%;border:1px solid var(--line);border-radius:10px"></div>`
+      : /^https?:\/\//i.test(img) ? ` · <a href="${QO.esc(img)}" target="_blank" rel="noopener">Xem mã QR</a>` : '';
     payEl.innerHTML = info + qr;
   };
 
@@ -64,8 +67,9 @@ QO.header('customer');
           <b>${i.qty}</b>
           <button class="btn ghost sm" data-d="${QO.esc(i.key)}" data-n="1" aria-label="Tăng số lượng">+</button>
           <span class="price" style="min-width:90px;text-align:right">${QO.money(line(i))}</span>
+          <button class="btn bad sm" data-x="${QO.esc(i.key)}" aria-label="Xóa ${QO.esc(i.name)} khỏi giỏ">Xóa</button>
         </div>
-      </div>`).join('') + '</div>';
+      </div>`).join('') + '</div><div style="margin-top:12px"><button class="btn ghost sm" type="button" id="clear">Xóa toàn bộ giỏ</button></div>';
 
     sum.innerHTML = `<div class="kv"><span>Số món</span><b>${count}</b></div>
       <div class="row" style="margin-top:12px"><b>Tổng cộng</b><span class="price" style="font-size:20px">${QO.money(total)}</span></div>`;
@@ -80,6 +84,12 @@ QO.header('customer');
   };
 
   box.onclick = e => {
+    if (e.target.closest('#clear')) {
+      if (!confirm('Xóa toàn bộ món trong giỏ?')) return;
+      const c = QO.getCart(); c.items = []; QO.setCart(c); draw(); return;
+    }
+    const rm = e.target.closest('[data-x]');
+    if (rm) { const c = QO.getCart(); c.items = c.items.filter(x => x.key !== rm.dataset.x); QO.setCart(c); draw(); return; }
     const b = e.target.closest('[data-d]'); if (!b) return;
     const c = QO.getCart(), i = c.items.find(x => x.key === b.dataset.d);
     if (!i) return;

@@ -3,6 +3,13 @@
   <h1>Đơn hàng</h1>
   <p class="sub">Đơn mới tự hiện sau vài giây. Xác nhận, hoàn thành hoặc hủy đơn tại đây.</p>
   <div id="top"></div>
+  <div class="custom row" style="justify-content:flex-start;gap:10px;margin-bottom:10px">
+    <label class="meta" for="dfrom">Từ ngày</label><input type="date" id="dfrom" style="width:auto">
+    <label class="meta" for="dto">đến</label><input type="date" id="dto" style="width:auto">
+    <button type="button" class="btn ghost sm" id="dgo">Lọc</button>
+    <button type="button" class="btn ghost sm" id="dclr">Bỏ lọc</button>
+    <label class="check" style="margin:0 0 0 auto"><input type="checkbox" id="snd"> Bật âm báo đơn mới</label>
+  </div>
   <div class="chips" id="chips" aria-label="Lọc theo trạng thái"></div>
   <div id="list" style="margin-top:14px"><div class="empty"><b>Đang tải...</b></div></div>
 </div>
@@ -25,7 +32,23 @@ QO.header('merchant');
     PREPARING: [['COMPLETED', 'Hoàn thành', 'btn sm'], ['CANCELLED', 'Hủy đơn', 'btn bad sm']],
   };
 
-  let orders = [], tableNo = {}, filter = '', seen = null, busy = false;
+  let orders = [], tableNo = {}, filter = '', seen = null, busy = false, dFrom = '', dTo = '';
+  const baseTitle = document.title;
+  let audio = null;
+  const snd = document.getElementById('snd');
+  try { snd.checked = localStorage.getItem('qo_sound') === '1'; } catch {}
+  // Âm báo: trình duyệt chỉ cho phát sau khi người dùng bấm, nên bật qua ô chọn này
+  const beep = () => {
+    if (!snd.checked) return;
+    try {
+      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+      const t = audio.currentTime, osc = audio.createOscillator(), g = audio.createGain();
+      osc.frequency.value = 880; osc.connect(g); g.connect(audio.destination);
+      g.gain.setValueAtTime(0.2, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
+      osc.start(t); osc.stop(t + 0.6);
+    } catch {}
+  };
+  snd.onchange = () => { try { localStorage.setItem('qo_sound', snd.checked ? '1' : '0'); } catch {} if (snd.checked) beep(); };
 
   const card = o => {
     const [label, tone] = QO.ORDER_STATUS[o.status] || ['Không rõ', ''];
@@ -61,6 +84,11 @@ QO.header('merchant');
       : `<div class="empty"><b>${orders.length ? 'Không có đơn ở mục này' : 'Chưa có đơn hàng'}</b>Đơn mới của khách tại bàn sẽ hiện ở đây.</div>`;
   };
 
+  document.getElementById('dgo').onclick = () => {
+    if (document.getElementById('dfrom').value && document.getElementById('dto').value && document.getElementById('dfrom').value > document.getElementById('dto').value) { QO.toast('Ngày bắt đầu phải trước ngày kết thúc'); return; }
+    dFrom = document.getElementById('dfrom').value; dTo = document.getElementById('dto').value; seen = null; tick();
+  };
+  document.getElementById('dclr').onclick = () => { document.getElementById('dfrom').value = ''; document.getElementById('dto').value = ''; dFrom = dTo = ''; seen = null; tick(); };
   chipsEl.onclick = e => { const b = e.target.closest('[data-f]'); if (b) { filter = b.dataset.f; draw(); } };
 
   listEl.onclick = async e => {
@@ -92,15 +120,17 @@ QO.header('merchant');
   const tick = async () => {
     if (busy || document.hidden) return;
     try {
-      const [list, tables] = await Promise.all([QO.api('GET', 'orders?shop_id=' + shop.id + '&limit=200'), QO.by('tables', 'shop_id', shop.id)]);
+      const [list, tables] = await Promise.all([QO.api('GET', 'orders?shop_id=' + shop.id + '&limit=200' + (dFrom ? '&from=' + dFrom : '') + (dTo ? '&to=' + dTo : '')), QO.by('tables', 'shop_id', shop.id)]);
       tableNo = Object.fromEntries(tables.map(t => [t.id, t.table_number]));
       const ids = new Set(list.map(o => o.id));
       if (seen) {
         const fresh = list.filter(o => o.status === 'PENDING' && !seen.has(o.id)).length;
-        if (fresh) QO.toast(`Có ${fresh} đơn mới`);
+        if (fresh) { QO.toast(`Có ${fresh} đơn mới`); beep(); }
       }
       seen = ids;
       orders = list;
+      const waiting = orders.filter(x => x.status === 'PENDING').length;
+      document.title = (waiting ? `(${waiting}) ` : '') + baseTitle;      // huy hiệu số đơn chờ trên thẻ trình duyệt
       topEl.querySelectorAll('.err').forEach(el => el.remove());
       draw();
     } catch (err) {
