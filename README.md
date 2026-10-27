@@ -5,7 +5,7 @@
 
 ![Python](https://img.shields.io/badge/Python-3.10+-blue)
 ![Flask](https://img.shields.io/badge/Flask-3.x-lightgrey)
-![Bootstrap](https://img.shields.io/badge/Bootstrap-5-purple)
+![SQLite](https://img.shields.io/badge/SQLite-3-green)
 ![Status](https://img.shields.io/badge/Status-Đang%20phát%20triển-orange)
 
 ---
@@ -77,15 +77,17 @@ flowchart LR
 - Gửi đơn thẳng đến quầy bếp; gọi thêm món bất cứ lúc nào
 - Thanh toán bằng tiền mặt tại quầy hoặc chuyển khoản/QR
 - Theo dõi trạng thái đơn: *Chờ xác nhận → Đang làm → Hoàn thành*; hủy đơn khi chưa được xác nhận
-- *(Nâng cao)* Đăng ký tài khoản tùy chọn để xem lịch sử, đặt lại món, đánh giá quán và món
+- *(Nâng cao)* Đăng ký tài khoản tùy chọn (xác nhận bằng mã 6 số gửi qua email) và sửa hồ sơ cá nhân. Xem lịch sử đơn theo tài khoản, đặt lại món, đánh giá quán và món: *dự kiến*. Hiện danh sách đơn được lưu trên thiết bị đang dùng
 
 ### 🏪 Phân hệ chủ quán
 - Đăng ký quán, quản lý thông tin quán và giờ mở cửa
 - **Quản lý bàn và tạo mã QR** cho từng bàn
 - Quản lý menu: thêm, sửa, xóa món, hình ảnh, giá, tùy chọn, đánh dấu hết món
-- **Nhận thông báo đơn mới**, xác nhận hoặc từ chối đơn, cập nhật trạng thái đơn
+- Cấu hình thông tin nhận chuyển khoản: số tài khoản và ảnh QR thanh toán (tải ảnh lên)
+- **Nhận thông báo đơn mới** (số đơn chờ trên tiêu đề trang, âm báo tùy chọn), lọc đơn theo trạng thái và ngày, xác nhận hoặc từ chối đơn (kèm lý do), cập nhật trạng thái đơn
 - Xác nhận thanh toán; *(nâng cao)* tính tiền theo bàn
-- *(Nâng cao)* Mã giảm giá, thống kê doanh thu theo ngày/tháng và món bán chạy
+- Thống kê doanh thu theo ngày/tháng và món bán chạy (chỉ tính đơn đã hoàn thành, ngày theo giờ Việt Nam)
+- *(Nâng cao, dự kiến)* Mã giảm giá
 
 ### 🛡️ Phân hệ quản trị viên
 - Duyệt hoặc khóa tài khoản quán
@@ -94,9 +96,9 @@ flowchart LR
 
 ### 🚀 Điểm nổi bật
 - **Gọi món bằng QR tại bàn:** khách quét là gọi, không cần app, không cần đăng ký
-- **Thông báo đơn mới** cho chủ quán theo thời gian thực
+- **Thông báo đơn mới** cho chủ quán: trang tự kiểm tra mỗi 7 giây, không cần tải lại
 - **Không thu hoa hồng**
-- **Gợi ý món hay đặt** dựa trên lịch sử và món bán chạy
+- **Gợi ý món hay đặt** dựa trên lịch sử và món bán chạy *(dự kiến)*
 
 ### 📊 Mức độ ưu tiên
 
@@ -116,40 +118,39 @@ flowchart LR
 
 | Thành phần | Công nghệ |
 |---|---|
-| Backend | Python, Flask |
-| Frontend | HTML, CSS, Bootstrap 5, JavaScript |
-| Template engine | Jinja2 |
-| Cơ sở dữ liệu | SQLite (có thể nâng lên MySQL) |
-| ORM | SQLAlchemy |
-| Biểu đồ | Chart.js |
-| Mã QR | Thư viện `qrcode` |
+| Backend | Python, Flask (API JSON, phiên đăng nhập phía server) |
+| Frontend | HTML, CSS, JavaScript thuần: các trang tĩnh gọi API bằng `fetch` |
+| Cơ sở dữ liệu | SQLite, dùng thư viện `sqlite3` có sẵn của Python (không dùng ORM); cấu trúc bảng trong `schema.sql` |
+| Biểu đồ | Chart.js (nạp từ CDN) |
+| Mã QR | `qrcode.js` (nạp từ CDN, tạo mã QR ngay trên trình duyệt chủ quán) |
+| Gửi email xác nhận | Brevo (API) |
+| Kiểm thử | `unittest` (có sẵn trong Python) |
 | Quản lý mã nguồn | Git, GitHub |
 | Quản lý công việc | Trello / GitHub Projects |
 | Thiết kế | Figma, draw.io |
-| Triển khai | PythonAnywhere / Render |
+| Triển khai | Render (chạy bằng `gunicorn`) hoặc PythonAnywhere |
 
 ## 📁 Cấu trúc thư mục
 
-> ⚠️ Cấu trúc dưới đây là bản dự kiến, sẽ được cập nhật khi dự án phát triển.
-
 ```
 CNPM-TULO/
-├── app/
-│   ├── __init__.py          # Khởi tạo Flask app
-│   ├── models.py            # Các model SQLAlchemy
-│   ├── auth/                # Đăng ký, đăng nhập, phân quyền
-│   ├── customer/            # Menu, giỏ hàng, đơn hàng
-│   ├── owner/               # Quản lý quán, bàn, menu, đơn, thống kê
-│   ├── admin/               # Trang quản trị
-│   ├── api/                 # Endpoint JSON (AJAX, thông báo đơn mới)
-│   ├── templates/           # Giao diện Jinja2
-│   └── static/              # CSS, JS, hình ảnh
-├── docs/                    # Tài liệu dự án (SRS, thiết kế, test case...)
-├── tests/                   # Mã kiểm thử tự động
-├── config.py                # Cấu hình ứng dụng
-├── run.py                   # Điểm chạy ứng dụng
-├── requirements.txt         # Danh sách thư viện
-├── .env.example             # Mẫu biến môi trường
+├── QuickOrder/                  # Mã nguồn ứng dụng
+│   ├── app.py                   # Flask: API (tài khoản, quán, menu, bàn, đơn hàng, doanh thu) và phục vụ trang tĩnh
+│   ├── schema.sql               # Cấu trúc cơ sở dữ liệu SQLite
+│   ├── init_db.py               # Tạo database trống (và tài khoản admin nếu đặt biến môi trường)
+│   ├── seed_data.py             # Nạp dữ liệu mẫu để chạy thử
+│   ├── mailer.py                # Gửi mã xác nhận email khi khách đăng ký
+│   ├── requirements.txt         # Thư viện Python (flask, gunicorn)
+│   ├── index.html               # Trang chủ
+│   ├── customer/                # Giao diện khách: menu, giỏ hàng, đơn hàng, tài khoản, hồ sơ
+│   ├── merchant/                # Giao diện chủ quán: thông tin quán, menu, bàn và QR, đơn hàng, doanh thu
+│   ├── admin/                   # Giao diện quản trị: duyệt quán
+│   ├── css/, js/                # Giao diện dùng chung và hàm gọi API (js/app.js)
+│   └── tests/                   # Kiểm thử tự động (unittest)
+├── docs/                        # Tài liệu dự án (SRS, Use Case, thiết kế...)
+├── QuickOrder_TestCases_Sprint1.docx
+├── QuickOrder_TestCases_Sprint2.docx
+├── sequence_diagram.md
 └── README.md
 ```
 
@@ -180,33 +181,46 @@ source venv/bin/activate
 
 **3. Cài đặt thư viện**
 ```bash
+cd QuickOrder
 pip install -r requirements.txt
 ```
 
-**4. Tạo file cấu hình**
-```bash
-# Windows
-copy .env.example .env
+**4. Tạo cơ sở dữ liệu**
 
+Nạp dữ liệu mẫu để chạy thử (có sẵn quán, menu, bàn và tài khoản demo, xem mục [Tài khoản demo](#-tài-khoản-demo)):
+```bash
+python seed_data.py --reset
+```
+Hoặc tạo database trống kèm tài khoản admin (dùng khi triển khai thật):
+```bash
 # macOS / Linux
-cp .env.example .env
-```
-Mở file `.env` và chỉnh các giá trị cần thiết:
-```
-SECRET_KEY=doi-thanh-chuoi-bi-mat-cua-ban
-DATABASE_URL=sqlite:///quickorder.db
-```
+ADMIN_EMAIL=admin@quickorder.vn ADMIN_PASSWORD=mat-khau-manh python init_db.py
 
-**5. Khởi tạo cơ sở dữ liệu và dữ liệu mẫu**
-```bash
-python init_db.py
+# Windows (PowerShell)
+$env:ADMIN_EMAIL="admin@quickorder.vn"; $env:ADMIN_PASSWORD="mat-khau-manh"; python init_db.py
 ```
+> `--reset` xóa toàn bộ dữ liệu cũ trong `database.db`.
 
-**6. Chạy ứng dụng**
+**5. Chạy ứng dụng** (vẫn trong thư mục `QuickOrder/`)
 ```bash
-flask --app run run --debug
+flask --app app run --debug
 ```
 Truy cập: **http://127.0.0.1:5000**
+
+Khi chạy thật nên đặt `SECRET_KEY` cố định, nếu không mỗi lần khởi động lại mọi người sẽ bị đăng xuất.
+
+### Biến môi trường
+
+| Biến | Ý nghĩa |
+|---|---|
+| `SECRET_KEY` | Khóa ký phiên đăng nhập; đặt một chuỗi bí mật cố định |
+| `HTTPS` | Đặt `1` khi chạy trên HTTPS (Render), để cookie đăng nhập chỉ đi qua HTTPS |
+| `QO_DB` | Đường dẫn file database (mặc định `QuickOrder/database.db`) |
+| `QO_UPLOADS` | Thư mục lưu ảnh QR thanh toán do chủ quán tải lên (mặc định `QuickOrder/uploads`) |
+| `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Dùng với `init_db.py` để tạo tài khoản admin (mật khẩu từ 8 ký tự) |
+| `FLASK_DEBUG` | Đặt `1` để bật chế độ debug khi chạy `python app.py`; không bật trên máy chủ thật |
+
+> ⚠️ Database và thư mục ảnh tải lên nằm trên ổ đĩa của máy chủ. Nếu nơi triển khai dùng ổ đĩa tạm thời (như gói miễn phí của Render) thì dữ liệu mất khi khởi động lại hoặc triển khai lại; cần gắn ổ đĩa lưu trữ lâu dài và trỏ `QO_DB`, `QO_UPLOADS` vào đó.
 
 ### Chạy kiểm thử
 Chạy trong thư mục `QuickOrder/` (không cần cài thêm thư viện):
@@ -216,27 +230,28 @@ python -m unittest discover -s tests -v
 (`pytest` cũng chạy được các test này.)
 
 ### Gửi email xác nhận khi khách đăng ký
-Khách đăng ký tài khoản sẽ nhận mã 6 số qua email. Đặt các biến môi trường sau trên máy chủ (Render: tab **Environment**):
+Khách đăng ký tài khoản sẽ nhận mã 6 số qua email. Đặt các biến môi trường sau trên máy chủ (Render: tab **Environment**), cùng với các biến ở mục trên:
 
 | Biến | Ý nghĩa |
 |---|---|
 | `MAIL_API_KEY` | Khóa API của Brevo (brevo.com) |
 | `MAIL_FROM` | Email người gửi, phải được xác minh trên Brevo |
 | `MAIL_FROM_NAME` | Tên người gửi (tùy chọn, mặc định `QuickOrder`) |
-| `HTTPS` | Đặt `1` khi chạy trên HTTPS (Render), để cookie đăng nhập chỉ đi qua HTTPS |
 
 Khi thử trên máy chưa có khóa API, đặt `MAIL_CONSOLE=1`: mã xác nhận sẽ in ra terminal thay vì gửi thư. Không bật biến này trên máy chủ thật.
 
-> 📝 *Các lệnh ở bước 5 và 6 sẽ được TV4 (Backend) xác nhận lại khi hoàn tất khung dự án.*
 
 ## 🔑 Tài khoản demo
 
-> Sẽ cập nhật sau khi có dữ liệu mẫu. Khách hàng không cần tài khoản: chỉ cần mở đường dẫn QR của một bàn.
+Có sau khi chạy `python seed_data.py --reset`. Mật khẩu chung của mọi tài khoản demo: `Demo@1234`. Chỉ dùng để chạy thử, **không dùng trên máy chủ thật**.
 
-| Vai trò | Email | Mật khẩu |
-|---|---|---|
-| Admin | `admin@quickorder.vn` | `...` |
-| Chủ quán | `owner@quickorder.vn` | `...` |
+Khách hàng không cần tài khoản để gọi món: chỉ cần mở đường dẫn QR của một bàn (chủ quán xem ở trang **Bàn và QR**).
+
+| Vai trò | Email |
+|---|---|
+| Admin | `admin@quickorder.vn` |
+| Chủ quán | `owner1@quickorder.vn` đến `owner6@quickorder.vn` |
+| Khách có tài khoản | `khach1@quickorder.vn` đến `khach4@quickorder.vn` |
 
 🔗 **Bản demo trực tuyến:** *(cập nhật sau khi deploy)*
 
@@ -253,9 +268,9 @@ Toàn bộ tài liệu nằm trong thư mục [`docs/`](./docs).
 | Thiết kế CSDL (ERD) | ⬜ Chưa làm |
 | Class Diagram | ✅ Bản 1.0, hoàn thành Sprint 0–1 ([xem file](docs/ClassDiagram_QuickOrder_v1.0.docx)) |
 | Sequence Diagram | ✅ Bản 1.0, 9 luồng chính ([xem file](docs/SequenceDiagram_QuickOrder_v1.0.docx)) |
-| Wireframe (Figma) | 🔄 Đã có bản phác thảo 10 màn hình ([xem file](docs/Wireframe_QuickOrder_v1.0.docx)); chờ dựng trên Figma, thêm liên kết Figma khi xong | |
+| Wireframe (Figma) | 🔄 Đã có bản phác thảo 10 màn hình ([xem file](docs/Wireframe_QuickOrder_v1.0.docx)); chờ dựng trên Figma, thêm liên kết Figma khi xong |
 | Cấu trúc Route/API | ✅ Bản 1.0, 82 route và 12 endpoint JSON ([xem file](docs/RouteAPI_QuickOrder_v1.0.docx)) |
-| Test case và báo cáo kiểm thử | ⬜ Chưa làm |
+| Test case và báo cáo kiểm thử | 🔄 Đã có test case [Sprint 1](QuickOrder_TestCases_Sprint1.docx) và [Sprint 2](QuickOrder_TestCases_Sprint2.docx); các ca Sprint 2 chưa ghi kết quả chạy; chưa có báo cáo kiểm thử. Test tự động nằm trong `QuickOrder/tests` |
 
 ## 🤝 Quy trình làm việc nhóm
 
@@ -286,8 +301,8 @@ refactor: tách hàm tính giá
 |---|---|---|
 | 1–3 | ✅ **Sprint 0** | Chuẩn bị, phân tích và thiết kế (SRS, Use Case, ERD, wireframe...) |
 | 4–5 | ✅ **Sprint 1** | Nền tảng, menu và QR bàn: đăng ký/đăng nhập, phân quyền, quản lý quán, menu, bàn và mã QR, quét QR xem menu |
-| 6–7 | 🔄 **Sprint 2** (đang thực hiện) | Gọi món và xử lý đơn: giỏ hàng, gửi đơn, thanh toán, thông báo đơn mới, cập nhật trạng thái |
-| 8 | **Sprint 3** | Tính năng nâng cao: thống kê, mã giảm giá, đánh giá, lịch sử đơn, hoàn thiện trang Admin |
+| 6–7 | 🔄 **Sprint 2** (đang thực hiện) | Gọi món và xử lý đơn: giỏ hàng, gửi đơn, thanh toán, thông báo đơn mới, cập nhật trạng thái. Mã nguồn các chức năng này đã có; còn chạy test case và cập nhật tài liệu |
+| 8 | **Sprint 3** | Tính năng nâng cao: thống kê (đã làm sẵn phần doanh thu), mã giảm giá, đánh giá, lịch sử đơn, hoàn thiện trang Admin |
 | 9 | **Sprint 4** | Kiểm thử tổng thể, đo hiệu năng, sửa lỗi |
 | 10 | Hoàn thiện | Deploy, tài liệu hướng dẫn, báo cáo, slide, demo |
 
