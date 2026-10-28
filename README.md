@@ -303,7 +303,7 @@ refactor: tách hàm tính giá
 | 1–3 | ✅ **Sprint 0** | Chuẩn bị, phân tích và thiết kế (SRS, Use Case, ERD, wireframe...) |
 | 4–5 | ✅ **Sprint 1** | Nền tảng, menu và QR bàn: đăng ký/đăng nhập, phân quyền, quản lý quán, menu, bàn và mã QR, quét QR xem menu |
 | 6–7 | ✅ **Sprint 2** | Gọi món và xử lý đơn: giỏ hàng, gửi đơn, thanh toán, thông báo đơn mới, cập nhật trạng thái |
-| 8 | 🔄 **Sprint 3** | Tính năng nâng cao: thống kê (đã làm sẵn phần doanh thu), mã giảm giá, đánh giá, lịch sử đơn, hoàn thiện trang Admin. Đã xong nhóm chủ quán: mã giảm giá (FR-46, FR-23), tính tiền theo bàn (FR-45), đánh giá (FR-24, FR-49); còn nhóm khách (FR-21/22/25/26) và Admin (FR-51–55) |
+| 8 | 🔄 **Sprint 3** | Tính năng nâng cao: thống kê (đã làm sẵn phần doanh thu), mã giảm giá, đánh giá, lịch sử đơn, hoàn thiện trang Admin. Đã xong nhóm chủ quán: mã giảm giá (FR-46, FR-23), tính tiền theo bàn (FR-45), đánh giá (FR-24, FR-49). Đã xong nhóm khách: lịch sử đơn (FR-21), đặt lại món (FR-22), gợi ý món (FR-25), khiếu nại (FR-26); còn Admin (FR-51–55, trong đó FR-55 xử lý khiếu nại) |
 | 9 | **Sprint 4** | Kiểm thử tổng thể, đo hiệu năng, sửa lỗi |
 | 10 | Hoàn thiện | Deploy, tài liệu hướng dẫn, báo cáo, slide, demo |
 

@@ -94,6 +94,13 @@ def init_db():
                 c.execute(f"ALTER TABLE orders ADD COLUMN {col} TEXT NOT NULL DEFAULT ''")
         if "discount_amount" not in have:
             c.execute("ALTER TABLE orders ADD COLUMN discount_amount INTEGER NOT NULL DEFAULT 0")
+        # FR-21: đơn gắn với tài khoản khách (NULL nếu khách ẩn danh). Chỉ tạo chỉ mục sau khi chắc chắn đã có cột.
+        if "user_id" not in have:
+            c.execute("ALTER TABLE orders ADD COLUMN user_id INTEGER REFERENCES users(id) ON UPDATE CASCADE ON DELETE SET NULL")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id, id)")
+        # FR-22: lưu id tùy chọn của từng dòng món để đặt lại đúng size/topping
+        if "option_ids" not in columns(c, "order_items"):
+            c.execute("ALTER TABLE order_items ADD COLUMN option_ids TEXT NOT NULL DEFAULT ''")
 
 
 def columns(c, table):
@@ -712,6 +719,7 @@ def order_view(row, items, reviewed=False):
     """Đơn gửi ra ngoài: không bao giờ kèm băm mã riêng. reviewed: khách đã đánh giá đơn này (FR-24)."""
     o = out(row)
     o.pop("access_hash", None)
+    o.pop("user_id", None)                 # không lộ tài khoản khách cho chủ quán
     o["items"] = items
     o["reviewed"] = reviewed
     return o
@@ -745,7 +753,7 @@ def as_int(v):
 
 
 def price_item(c, shop_id, item):
-    """Kiểm tra một dòng món và tính giá. Trả về ((dish_id, số lượng, đơn giá, ghi chú), None) hoặc (None, lỗi).
+    """Kiểm tra một dòng món và tính giá. Trả về ((dish_id, số lượng, đơn giá, ghi chú, id tùy chọn), None) hoặc (None, lỗi).
     Đơn giá gồm giá món cộng giá thêm của các tùy chọn đã chọn; tên tùy chọn được ghi vào ghi chú của dòng."""
     if not isinstance(item, dict):
         return None, "Món trong đơn không hợp lệ."
@@ -787,7 +795,7 @@ def price_item(c, shop_id, item):
             return None, f'Món {dish["name"]}: nhóm "{g["name"]}" chỉ được chọn một.'
     unit = int(dish["price"]) + sum(int(o["extra_price"]) for o in chosen)
     full_note = "; ".join(p for p in (", ".join(o["name"] for o in chosen), note) if p)
-    return (dish_id, qty, unit, full_note), None
+    return (dish_id, qty, unit, full_note, ",".join(str(o["id"]) for o in chosen)), None
 
 
 def price_lines(c, shop_id, items):
@@ -882,14 +890,16 @@ def create_order():
         total = subtotal - discount                    # BR-13: tổng tiền sau giảm giá
 
         token = secrets.token_urlsafe(24)              # chỉ trả về một lần; server chỉ giữ băm
+        u = current_user()
+        user_id = u["id"] if u and u["role"] == "customer" else None   # khách đã đăng nhập thì đơn vào lịch sử (FR-21)
         order_id = c.execute(
             "INSERT INTO orders (shop_id, table_id, customer_name, payment_method, total_amount, note, access_hash, "
-            "coupon_code, discount_amount) VALUES (?,?,?,?,?,?,?,?,?)",
+            "coupon_code, discount_amount, user_id) VALUES (?,?,?,?,?,?,?,?,?,?)",
             (shop_id, table_id, customer, payment_method, total, note, token_hash(token),
-             cp["code"] if cp else "", discount)).lastrowid
+             cp["code"] if cp else "", discount, user_id)).lastrowid
         c.executemany(
-            "INSERT INTO order_items (order_id, dish_id, quantity, unit_price, note) VALUES (?,?,?,?,?)",
-            [(order_id, dish_id, qty, unit, line_note) for dish_id, qty, unit, line_note in lines])
+            "INSERT INTO order_items (order_id, dish_id, quantity, unit_price, note, option_ids) VALUES (?,?,?,?,?,?)",
+            [(order_id, dish_id, qty, unit, line_note, opt_ids) for dish_id, qty, unit, line_note, opt_ids in lines])
         result = order_json(c, order_id)
     result["access_token"] = token
     return jsonify(result), 201
@@ -1291,6 +1301,194 @@ def list_reviews():
             o["dishes"] = dish.get(r["id"], [])
             reviews.append(o)
         return jsonify(count=stat[0], average=round(stat[1], 2) if stat[1] else 0, distribution=dist, reviews=reviews)
+
+
+# ---------- Tiện ích của khách (FR-21, FR-22, FR-25, FR-26) ----------
+MAX_COMPLAINT = 500
+MIN_COMPLAINT = 10
+MAX_COMPLAINTS_PER_ORDER = 5
+HISTORY_PAGE = 20
+
+
+def complaint_status_of(c, ids):
+    """Trạng thái khiếu nại mới nhất của từng đơn: {id đơn: 'OPEN' | 'REPLIED' | 'CLOSED'}."""
+    if not ids:
+        return {}
+    marks = ",".join("?" * len(ids))
+    latest = {}
+    for r in c.execute(f"SELECT order_id, status FROM complaints WHERE order_id IN ({marks}) ORDER BY id", list(ids)):
+        latest[r["order_id"]] = r["status"]
+    return latest
+
+
+def history_view(c, rows):
+    """Đơn trong lịch sử của khách: thêm tên quán, số bàn và trạng thái khiếu nại mới nhất."""
+    ids = [r["id"] for r in rows]
+    items, done, complaints = items_of(c, ids), reviewed_ids(c, ids), complaint_status_of(c, ids)
+    result = []
+    for r in rows:
+        o = order_view(r, items[r["id"]], r["id"] in done)
+        o["shop_name"], o["table_number"] = r["shop_name"], r["table_number"]
+        o["complaint_status"] = complaints.get(r["id"])
+        result.append(o)
+    return result
+
+
+HISTORY_SQL = ("SELECT o.*, s.name AS shop_name, t.table_number FROM orders o JOIN shops s ON s.id = o.shop_id "
+               "LEFT JOIN shop_tables t ON t.id = o.table_id WHERE o.user_id = ?")
+
+
+@app.get("/api/my/orders")
+def my_orders():
+    """FR-21: lịch sử đơn của khách đã đăng nhập, mới nhất trước. Phân trang bằng before (id đơn) và limit."""
+    u = login_required("customer")
+    status = request.args.get("status")
+    if status and status not in ORDER_STATUSES:
+        return jsonify(error="Trạng thái đơn không hợp lệ."), 400
+    try:
+        limit = int(request.args.get("limit", HISTORY_PAGE))
+        before = int(request.args["before"]) if request.args.get("before") else None
+    except ValueError:
+        return jsonify(error="Tham số không hợp lệ."), 400
+    if not 1 <= limit <= 100:
+        return jsonify(error="limit phải từ 1 đến 100."), 400
+    sql, args = HISTORY_SQL, [u["id"]]
+    if status:
+        sql += " AND o.status = ?"
+        args.append(status)
+    if before is not None:
+        sql += " AND o.id < ?"
+        args.append(before)
+    with db() as c:
+        rows = c.execute(sql + " ORDER BY o.id DESC LIMIT ?", args + [limit + 1]).fetchall()   # lấy dư 1 dòng để biết còn trang sau
+        more = len(rows) > limit
+        rows = rows[:limit]
+        return jsonify(orders=history_view(c, rows), next_before=rows[-1]["id"] if more else None)
+
+
+def my_order(c, id, u):
+    row = c.execute(HISTORY_SQL + " AND o.id = ?", (u["id"], id)).fetchone()
+    if not row:
+        abort(404)                             # đơn của người khác cũng báo 404
+    return row
+
+
+@app.get("/api/my/orders/<int:id>")
+def my_order_detail(id):
+    u = login_required("customer")
+    with db() as c:
+        return jsonify(history_view(c, [my_order(c, id, u)])[0])
+
+
+def unavailable_reason(c, shop_id, dish_id):
+    """Vì sao một dòng món không đặt lại được: món hết/ngừng bán, hay tùy chọn đã thay đổi."""
+    d = c.execute("SELECT is_available, is_deleted FROM dishes WHERE id = ? AND shop_id = ?", (dish_id, shop_id)).fetchone()
+    if not d or d["is_deleted"]:
+        return "Món đã ngừng bán."
+    if not d["is_available"]:
+        return "Món đã hết."
+    return "Tùy chọn của món đã thay đổi, hãy chọn lại trong menu."
+
+
+@app.post("/api/my/orders/<int:id>/reorder")
+def reorder(id):
+    """FR-22: dựng lại giỏ từ đơn cũ. Mỗi dòng được kiểm tra lại với menu hiện tại (còn món, tùy chọn còn hợp lệ)
+    và lấy GIÁ HIỆN TẠI, không dùng giá cũ (BR-04 chỉ áp dụng cho đơn đã đặt). Không ghi gì vào CSDL; khách tự gửi đơn mới.
+    Trả về: items (dòng đặt lại được, theo dạng giỏ), skipped (dòng bỏ qua kèm lý do), accepting (quán có đang nhận đơn)."""
+    u = login_required("customer")
+    with db() as c:
+        order = my_order(c, id, u)
+        shop = c.execute("SELECT id, name, open_time, close_time, status FROM shops WHERE id = ?", (order["shop_id"],)).fetchone()
+        if not shop or shop["status"] != "APPROVED":
+            return jsonify(error="Quán hiện không nhận đơn."), 409
+        rows = c.execute("SELECT oi.*, d.name AS dish_name, d.price AS dish_price FROM order_items oi "
+                         "JOIN dishes d ON d.id = oi.dish_id WHERE oi.order_id = ? ORDER BY oi.id", (id,)).fetchall()
+        items, skipped = [], []
+        for r in rows:
+            ids = [int(x) for x in r["option_ids"].split(",") if x.isdigit()]
+            line, err = price_item(c, shop["id"], {"dish_id": r["dish_id"], "quantity": r["quantity"], "option_ids": ids})
+            if err:
+                skipped.append({"dish_id": r["dish_id"], "dish_name": r["dish_name"],
+                                "reason": unavailable_reason(c, shop["id"], r["dish_id"])})
+                continue
+            picked = []
+            if ids:
+                marks = ",".join("?" * len(ids))
+                picked = [out(o) for o in c.execute(f"SELECT id, name, extra_price FROM options WHERE id IN ({marks}) ORDER BY id", ids)]
+            items.append({"dish_id": r["dish_id"], "name": r["dish_name"], "price": r["dish_price"], "qty": r["quantity"],
+                          "options": picked, "unit_price": line[2], "old_unit_price": r["unit_price"],
+                          "price_changed": line[2] != r["unit_price"]})
+        return jsonify(shop={"id": shop["id"], "name": shop["name"]}, items=items, skipped=skipped,
+                       accepting=is_open_now(shop))
+
+
+@app.get("/api/shops/<int:id>/suggestions")
+def shop_suggestions(id):
+    """FR-25: gợi ý món. popular = bán chạy của quán (tính đơn Hoàn thành), ai cũng xem được.
+    mine = món khách đăng nhập đã gọi từ 2 đơn trở lên ở quán này (không tính đơn đã hủy); khách ẩn danh nhận danh sách rỗng."""
+    u = current_user()
+    base = ("SELECT d.id AS dish_id, d.name, d.price, d.is_available, SUM(oi.quantity) AS total, COUNT(DISTINCT o.id) AS order_count "
+            "FROM order_items oi JOIN orders o ON o.id = oi.order_id JOIN dishes d ON d.id = oi.dish_id "
+            "WHERE o.shop_id = ? AND d.is_deleted = 0 AND ")
+    with db() as c:
+        if not c.execute("SELECT 1 FROM shops WHERE id = ? AND status = 'APPROVED'", (id,)).fetchone():
+            abort(404)
+        popular = c.execute(base + "o.status = 'COMPLETED' GROUP BY d.id ORDER BY total DESC, d.id LIMIT 5", (id,)).fetchall()
+        mine = []
+        if u and u["role"] == "customer":
+            mine = c.execute(base + "o.user_id = ? AND o.status != 'CANCELLED' GROUP BY d.id HAVING order_count >= 2 "
+                             "ORDER BY order_count DESC, total DESC, d.id LIMIT 5", (id, u["id"])).fetchall()
+        return jsonify(popular=[out(r) for r in popular], mine=[out(r) for r in mine])
+
+
+# ---------- Khiếu nại (FR-26) ----------
+def complaint_order(c, id, token):
+    """Đơn mà người gọi được khiếu nại: khách đăng nhập là chủ đơn, hoặc khách giữ mã riêng của đơn. Còn lại: 404."""
+    order = c.execute("SELECT * FROM orders WHERE id = ?", (id,)).fetchone()
+    u = current_user()
+    mine = u is not None and u["role"] == "customer" and order is not None and order["user_id"] == u["id"]
+    if not order or not (mine or token_ok(order, token)):
+        abort(404)
+    return order
+
+
+@app.post("/api/orders/<int:id>/complaints")
+def create_complaint(id):
+    d = json_body()
+    content = text(d, "content")
+    if not MIN_COMPLAINT <= len(content) <= MAX_COMPLAINT:
+        return jsonify(error=f"Nội dung khiếu nại phải từ {MIN_COMPLAINT} đến {MAX_COMPLAINT} ký tự."), 400
+    with db() as c:
+        order = complaint_order(c, id, text(d, "token"))
+        if order["status"] == "PENDING":
+            return jsonify(error="Đơn đang chờ quán xác nhận. Nếu muốn thay đổi, hãy hủy đơn."), 409
+        rows = c.execute("SELECT status FROM complaints WHERE order_id = ?", (id,)).fetchall()
+        if any(r["status"] != "CLOSED" for r in rows):
+            return jsonify(error="Đơn này đang có khiếu nại chưa được xử lý xong."), 409
+        if len(rows) >= MAX_COMPLAINTS_PER_ORDER:
+            return jsonify(error=f"Mỗi đơn chỉ được gửi tối đa {MAX_COMPLAINTS_PER_ORDER} khiếu nại."), 409
+        u = current_user()
+        cid = c.execute("INSERT INTO complaints (order_id, shop_id, user_id, content) VALUES (?,?,?,?)",
+                        (id, order["shop_id"], u["id"] if u and u["role"] == "customer" else None, content)).lastrowid
+        return jsonify(out(c.execute("SELECT * FROM complaints WHERE id = ?", (cid,)).fetchone())), 201
+
+
+@app.get("/api/orders/<int:id>/complaints")
+def order_complaints(id):
+    """Khách theo dõi trạng thái xử lý khiếu nại của một đơn (mới nhất trước)."""
+    with db() as c:
+        complaint_order(c, id, request.args.get("token", ""))
+        rows = c.execute("SELECT * FROM complaints WHERE order_id = ? ORDER BY id DESC", (id,)).fetchall()
+        return jsonify([out(r) for r in rows])
+
+
+@app.get("/api/my/complaints")
+def my_complaints():
+    u = login_required("customer")
+    with db() as c:
+        rows = c.execute("SELECT m.*, s.name AS shop_name FROM complaints m JOIN shops s ON s.id = m.shop_id "
+                         "WHERE m.user_id = ? ORDER BY m.id DESC LIMIT 100", (u["id"],)).fetchall()
+        return jsonify([out(r) for r in rows])
 
 
 # ---------- Doanh thu (FR-47, FR-48) ----------

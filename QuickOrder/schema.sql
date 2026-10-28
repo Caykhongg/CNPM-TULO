@@ -113,10 +113,13 @@ CREATE TABLE IF NOT EXISTS orders (
     coupon_code TEXT NOT NULL DEFAULT '',          -- mã giảm giá đã dùng (rỗng nếu không dùng)
     discount_amount INTEGER NOT NULL DEFAULT 0,    -- số tiền đã giảm; total_amount là số tiền khách phải trả sau giảm
     note TEXT NOT NULL DEFAULT '',
+    user_id INTEGER,                               -- tài khoản khách đã đăng nhập lúc gửi đơn (NULL nếu khách ẩn danh); dùng cho lịch sử đơn (FR-21)
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (shop_id) REFERENCES shops(id)
         ON UPDATE CASCADE ON DELETE CASCADE,
     FOREIGN KEY (table_id) REFERENCES shop_tables(id)
+        ON UPDATE CASCADE ON DELETE SET NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id)
         ON UPDATE CASCADE ON DELETE SET NULL
 );
 
@@ -127,6 +130,7 @@ CREATE TABLE IF NOT EXISTS order_items (
     quantity INTEGER NOT NULL CHECK (quantity > 0),
     unit_price INTEGER NOT NULL CHECK (unit_price >= 0),
     note TEXT NOT NULL DEFAULT '',
+    option_ids TEXT NOT NULL DEFAULT '',           -- id các tùy chọn đã chọn, cách nhau bằng dấu phẩy; dùng để đặt lại món (FR-22)
     FOREIGN KEY (order_id) REFERENCES orders(id)
         ON UPDATE CASCADE ON DELETE CASCADE,
     FOREIGN KEY (dish_id) REFERENCES dishes(id)
@@ -213,3 +217,29 @@ CREATE INDEX IF NOT EXISTS idx_review_dishes_dish
 -- Tính tiền theo bàn (FR-45) tìm các đơn chưa thanh toán của một bàn.
 CREATE INDEX IF NOT EXISTS idx_orders_table_unpaid
     ON orders(table_id, payment_status);
+
+-- Khiếu nại về đơn hàng (FR-26). Khách có tài khoản gửi (user_id) hoặc khách ẩn danh gửi bằng mã riêng của đơn (user_id NULL).
+-- Admin xử lý ở FR-55: phản hồi (REPLIED) rồi đóng (CLOSED). Mỗi đơn chỉ có một khiếu nại chưa đóng tại một thời điểm.
+CREATE TABLE IF NOT EXISTS complaints (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id INTEGER NOT NULL,
+    shop_id INTEGER NOT NULL,
+    user_id INTEGER,
+    content TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN', 'REPLIED', 'CLOSED')),
+    admin_reply TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (order_id) REFERENCES orders(id)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+    FOREIGN KEY (shop_id) REFERENCES shops(id)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+        ON UPDATE CASCADE ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_complaints_order
+    ON complaints(order_id);
+
+CREATE INDEX IF NOT EXISTS idx_complaints_user
+    ON complaints(user_id, id);

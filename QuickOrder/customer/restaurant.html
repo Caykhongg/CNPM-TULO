@@ -14,6 +14,9 @@ QO.header('customer');
 
   const [dAll, cats, gAll, oAll] = await Promise.all([QO.by('dishes', 'shop_id', id), QO.all('categories'), QO.all('optionGroups'), QO.all('options')]);
   const dishes = dAll.filter(d => !d.is_deleted);
+  // FR-25: món bán chạy của quán; khách đăng nhập được thêm "Bạn hay gọi". Lỗi mạng thì bỏ qua, menu vẫn dùng được.
+  let sug = {popular: [], mine: []};
+  try { sug = await QO.api('GET', 'shops/' + Number(id) + '/suggestions'); } catch {}
   const groupsOf = d => gAll.filter(g => g.dish_id === d.id && oAll.some(o => o.group_id === g.id));   // nhóm chưa có tùy chọn thì ẩn
   const optsOf = g => oAll.filter(o => o.group_id === g.id);
   const accepting = QO.isAccepting(shop);
@@ -49,7 +52,10 @@ QO.header('customer');
     const used = cats.filter(c => dishes.some(d => d.category_id === c.id));
     const sections = used.filter(c => shown.some(d => d.category_id === c.id))
       .map(c => `<h2 style="margin-top:22px">${QO.esc(c.name)}</h2><div class="list">${shown.filter(d => d.category_id === c.id).map(card).join('')}</div>`).join('');
-    menuEl.innerHTML = dishes.length ? (sections || '<div class="empty"><b>Không có món phù hợp</b></div>') : '<div class="empty"><b>Quán chưa có món</b>Menu sẽ hiển thị khi quán thêm món.</div>';
+    const pick = list => list.map(x => dishes.find(d => d.id === x.dish_id)).filter(Boolean);
+    const block = (title, list) => list.length ? `<h2 style="margin-top:22px">${title}</h2><div class="list">${list.map(card).join('')}</div>` : '';
+    const sugHtml = !k && !cat ? block('Bạn hay gọi', pick(sug.mine)) + block('Món bán chạy', pick(sug.popular)) : '';   // chỉ hiện khi không tìm kiếm hay lọc
+    menuEl.innerHTML = dishes.length ? (sugHtml + (sections || '<div class="empty"><b>Không có món phù hợp</b></div>')) : '<div class="empty"><b>Quán chưa có món</b>Menu sẽ hiển thị khi quán thêm món.</div>';
     chipsEl.innerHTML = used.length
       ? `<button class="chip${cat ? '' : ' on'}" data-c="0">Tất cả</button>` + used.map(c => `<button class="chip${cat === c.id ? ' on' : ''}" data-c="${c.id}">${QO.esc(c.name)}</button>`).join('')
       : '';

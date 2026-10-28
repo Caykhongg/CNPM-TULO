@@ -1,0 +1,122 @@
+<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Lịch sử đơn hàng - QuickOrder</title><link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="../css/style.css"><script src="../js/app.js"></script></head><body>
+<div class="wrap">
+  <h1>Lịch sử đơn hàng</h1>
+  <p class="sub" id="sub">Các đơn bạn đã gọi khi đăng nhập, trên mọi thiết bị.</p>
+  <div id="note" role="status"></div>
+  <div class="chips" id="chips" aria-label="Lọc theo trạng thái" hidden></div>
+  <div id="list"><div class="empty"><b>Đang tải...</b></div></div>
+  <div id="more" style="margin-top:14px;text-align:center" hidden><button class="btn ghost" type="button" id="moreBtn">Xem thêm đơn cũ hơn</button></div>
+</div>
+<script>
+QO.header('customer');
+(async () => {
+  const chipsEl = document.getElementById('chips'), listEl = document.getElementById('list'), noteEl = document.getElementById('note');
+  const moreEl = document.getElementById('more'), moreBtn = document.getElementById('moreBtn');
+  // CONFIRMED và PREPARING cùng hiển thị là "Đang làm" nên gộp chung khi lọc
+  const bucket = s => ({PENDING: 'PENDING', CONFIRMED: 'WORKING', PREPARING: 'WORKING', COMPLETED: 'COMPLETED', CANCELLED: 'CANCELLED'})[s];
+  const FILTERS = [['', 'Tất cả'], ['PENDING', 'Chờ xác nhận'], ['WORKING', 'Đang làm'], ['COMPLETED', 'Hoàn thành'], ['CANCELLED', 'Đã hủy']];
+  let filter = '', orders = [], nextBefore = null;
+
+  const me = await QO.session();
+  if (!me || me.role !== 'customer') {
+    listEl.innerHTML = `<div class="empty"><b>Bạn cần đăng nhập bằng tài khoản khách</b>Lịch sử chỉ có với đơn gọi khi đã đăng nhập. Đơn gọi không đăng nhập xem ở mục <a href="orders.html">Đơn hàng</a>.
+      <div style="margin-top:12px"><a class="btn" href="account.html">Đăng nhập</a> <a class="btn ghost" href="account.html?mode=register">Tạo tài khoản</a></div></div>`;
+    return;
+  }
+  chipsEl.hidden = false;
+
+  const card = o => {
+    const [label, tone] = QO.ORDER_STATUS[o.status] || ['Không rõ', ''];
+    const items = o.items.map(i => `<li>${i.quantity} × ${QO.esc(i.dish_name)}${i.note ? ` <span class="meta">(${QO.esc(i.note)})</span>` : ''}</li>`).join('');
+    const pay = `${QO.PAY_METHOD[o.payment_method] || ''} · ${o.payment_status === 'PAID' ? 'Đã thanh toán' : 'Chưa thanh toán'}`;
+    const cs = o.complaint_status && QO.COMPLAINT_STATUS[o.complaint_status];
+    const complain = o.status !== 'PENDING'
+      ? `<button class="btn ghost sm" data-complain="${o.id}">${cs ? 'Xem khiếu nại' : 'Gửi khiếu nại'}</button>${cs ? ` <span class="tag ${cs[1]}">${cs[0]}</span>` : ''}` : '';
+    const reason = o.status === 'CANCELLED' && o.cancel_reason ? `<div class="meta" style="margin-top:6px">Lý do: ${QO.esc(o.cancel_reason)}</div>` : '';
+    return `<article class="item" style="display:block">
+      <div class="row">
+        <div><h3>Đơn #${o.id} · ${QO.esc(o.shop_name || 'Quán')}</h3><div class="meta">${o.table_number ? QO.esc(QO.tableLabel(o.table_number)) + ' · ' : ''}${QO.esc(QO.fmtTime(o.created_at))}</div></div>
+        <span class="tag ${tone}">${label}</span>
+      </div>
+      <ul style="margin:10px 0 6px;padding-left:18px">${items}</ul>
+      ${o.note ? `<div class="meta">Ghi chú: ${QO.esc(o.note)}</div>` : ''}
+      <div class="row" style="margin-top:8px"><span class="meta">${pay}</span><span class="price">${QO.money(o.total_amount)}</span></div>
+      ${o.discount_amount ? `<div class="meta" style="margin-top:4px">Đã giảm ${QO.money(o.discount_amount)} (mã ${QO.esc(o.coupon_code)})</div>` : ''}
+      ${reason}
+      <div class="row" style="margin-top:10px;justify-content:flex-start;gap:8px;flex-wrap:wrap"><button class="btn sm" data-again="${o.id}">Đặt lại món</button>${complain}</div>
+    </article>`;
+  };
+
+  const draw = () => {
+    chipsEl.innerHTML = FILTERS.map(([v, t]) => `<button type="button" class="chip${filter === v ? ' on' : ''}" data-f="${v}">${t}</button>`).join('');
+    const rows = orders.filter(o => !filter || bucket(o.status) === filter);
+    if (!orders.length) {
+      listEl.innerHTML = '<div class="empty"><b>Chưa có đơn nào</b>Các đơn bạn gọi khi đã đăng nhập sẽ hiện ở đây.</div>';
+    } else {
+      listEl.innerHTML = rows.length ? '<div class="list">' + rows.map(card).join('') + '</div>'
+        : '<div class="empty"><b>Không có đơn ở mục này</b>' + (nextBefore ? 'Bấm "Xem thêm" để tìm trong các đơn cũ hơn.' : '') + '</div>';
+    }
+    moreEl.hidden = !nextBefore;
+  };
+
+  const load = async (more = false) => {
+    moreBtn.disabled = true;
+    try {
+      const r = await QO.api('GET', 'my/orders' + (more && nextBefore ? '?before=' + nextBefore : ''));
+      orders = more ? orders.concat(r.orders) : r.orders;
+      nextBefore = r.next_before;
+    } catch (e) {
+      listEl.innerHTML = `<div class="err">${QO.esc(e.message)}</div>`;
+    }
+    moreBtn.disabled = false; draw();
+  };
+
+  chipsEl.onclick = e => { const b = e.target.closest('[data-f]'); if (b) { filter = b.dataset.f; draw(); } };
+  moreBtn.onclick = () => load(true);
+
+  // FR-22: đặt lại món. Server kiểm tra lại menu hiện tại và trả giá hiện tại; trang này chỉ đưa vào giỏ, khách tự bấm đặt ở giỏ hàng.
+  const reorder = async id => {
+    noteEl.innerHTML = '';
+    const r = await QO.api('POST', `my/orders/${id}/reorder`, {});
+    if (!r.items.length) {
+      noteEl.innerHTML = `<div class="err" style="margin-bottom:12px"><b>Không có món nào đặt lại được.</b><ul style="margin:6px 0 0;padding-left:18px">${r.skipped.map(s => `<li>${QO.esc(s.dish_name)}: ${QO.esc(s.reason)}</li>`).join('')}</ul></div>`;
+      return;
+    }
+    let c = QO.getCart();
+    if (c.shop_id && c.shop_id !== r.shop.id && c.items.length && !confirm('Giỏ đang có món của quán khác. Xóa giỏ cũ?')) return;
+    if (c.shop_id !== r.shop.id) c = {shop_id: r.shop.id, table: null, items: []};
+    for (const i of r.items) {
+      const opts = i.options.map(o => ({id: o.id, name: o.name, extra_price: o.extra_price}));
+      const key = i.dish_id + ':' + opts.map(o => o.id).sort().join(',');           // cùng cách tạo khóa với trang menu
+      const ex = c.items.find(x => x.key === key);
+      if (ex) { ex.qty = Math.min(50, ex.qty + i.qty); ex.price = i.price; }
+      else c.items.push({key, dish_id: i.dish_id, name: i.name, price: i.price, options: opts, qty: i.qty});
+    }
+    c.shop_id = r.shop.id;
+    QO.setCart(c);
+    const changed = r.items.filter(i => i.price_changed);
+    if (!r.skipped.length && !changed.length && r.accepting && c.table) { location.href = 'cart.html'; return; }
+    const lines = [];
+    if (changed.length) lines.push(`<li>Giá hiện tại khác lần trước: ${changed.map(i => `${QO.esc(i.name)} (${QO.money(i.old_unit_price)} → ${QO.money(i.unit_price)})`).join(', ')}.</li>`);
+    if (r.skipped.length) lines.push(...r.skipped.map(s => `<li>Bỏ qua ${QO.esc(s.dish_name)}: ${QO.esc(s.reason)}</li>`));
+    if (!r.accepting) lines.push('<li>Quán hiện không nhận đơn (ngoài giờ mở cửa).</li>');
+    if (!c.table) lines.push('<li>Hãy quét mã QR trên bàn để gửi đơn.</li>');
+    noteEl.innerHTML = `<div class="card" style="margin-bottom:14px"><b>Đã thêm ${r.items.length} món vào giỏ.</b><ul style="margin:6px 0 10px;padding-left:18px">${lines.join('')}</ul><a class="btn sm" href="cart.html">Đến giỏ hàng</a></div>`;
+    window.scrollTo({top: 0, behavior: 'smooth'});
+  };
+
+  listEl.onclick = async e => {
+    const again = e.target.closest('[data-again]');
+    if (again) {
+      again.disabled = true;
+      try { await reorder(Number(again.dataset.again)); } catch (err) { QO.toast(err.message); }
+      again.disabled = false; return;
+    }
+    const cb = e.target.closest('[data-complain]');
+    if (cb) QO.complaintDialog({orderId: Number(cb.dataset.complain), onSent: () => load()});
+  };
+
+  await load();
+})();
+</script>
+</body></html>

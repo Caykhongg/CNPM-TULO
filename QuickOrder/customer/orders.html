@@ -48,6 +48,7 @@ QO.header('customer');
       ? '<div class="meta" style="margin-top:10px">Bạn đã đánh giá đơn này. Cảm ơn bạn!</div>'
       : `<div style="margin-top:10px"><button class="btn sm" data-review="${o.id}">Đánh giá đơn</button></div>`) : '';
     const cancel = o.status === 'PENDING' ? `<div style="margin-top:10px"><button class="btn bad sm" data-cancel="${o.id}">Hủy đơn</button></div>` : '';
+    const complain = o.status !== 'PENDING' ? `<div style="margin-top:10px"><button class="btn ghost sm" data-complain="${o.id}">Gửi khiếu nại</button></div>` : '';
     const reason = o.status === 'CANCELLED' && o.cancel_reason ? `<div class="meta" style="margin-top:6px">Lý do: ${QO.esc(o.cancel_reason)}</div>` : '';
     return `<article class="item" style="display:block">
       <div class="row">
@@ -59,7 +60,7 @@ QO.header('customer');
       <div class="row" style="margin-top:8px"><span class="meta">${pay}</span><span class="price">${QO.money(o.total_amount)}</span></div>
       ${o.discount_amount ? `<div class="meta" style="margin-top:4px">Đã giảm ${QO.money(o.discount_amount)} (mã ${QO.esc(o.coupon_code)})</div>` : ''}
       ${reason}
-      ${cancel}${rate}
+      ${cancel}${rate}${complain}
     </article>`;
   };
 
@@ -113,6 +114,12 @@ QO.header('customer');
   };
 
   listEl.onclick = async e => {
+    const cb = e.target.closest('[data-complain]');
+    if (cb) {                                             // FR-26: khách ẩn danh khiếu nại bằng mã riêng của đơn
+      const saved = QO.getOrders().find(x => x.id === Number(cb.dataset.complain));
+      if (saved) QO.complaintDialog({orderId: saved.id, token: saved.token || ''});
+      return;
+    }
     const rb = e.target.closest('[data-review]');
     if (rb) {
       reviewing = cache.get(Number(rb.dataset.review)); if (!reviewing) return;

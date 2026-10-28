@@ -72,11 +72,50 @@ const QO = (() => {
   const saveOrders = list => { try { localStorage.setItem('qo_orders', JSON.stringify(list)); } catch {} };
   const addOrder = o => saveOrders([o, ...getOrders().filter(x => x.id !== o.id)].slice(0, 30));
 
+  // ===== Khiếu nại đơn hàng (FR-26) =====
+  // Hộp thoại dùng chung: khách có tài khoản gọi {orderId}; khách ẩn danh gọi thêm {token} (mã riêng của đơn lưu trên thiết bị).
+  const COMPLAINT_STATUS = {OPEN: ['Đã gửi', 'wait'], REPLIED: ['Đã phản hồi', 'ok'], CLOSED: ['Đã đóng', 'no']};
+  const complaintDialog = async ({orderId, token = '', onSent}) => {
+    document.getElementById('cpl')?.remove();
+    const d = document.createElement('dialog'); d.id = 'cpl';
+    d.innerHTML = `<form method="dialog"><h2>Khiếu nại đơn #${Number(orderId)}</h2>
+      <div id="cpl-list"></div>
+      <div id="cpl-new"><label class="field"><span>Nội dung khiếu nại (10 đến 500 ký tự)</span><textarea id="cpl-t" rows="4" maxlength="500" placeholder="VD: Món lên chậm, thiếu món, sai món..."></textarea></label>
+        <div class="err" id="cpl-e" role="alert"></div></div>
+      <div class="row" style="margin-top:12px"><button class="btn ghost" value="x">Đóng</button><button class="btn" id="cpl-ok" type="button">Gửi khiếu nại</button></div></form>`;
+    document.body.appendChild(d);
+    d.addEventListener('close', () => d.remove());
+    d.showModal();
+    const list = d.querySelector('#cpl-list'), box = d.querySelector('#cpl-new'), ok = d.querySelector('#cpl-ok'), err = d.querySelector('#cpl-e'), ta = d.querySelector('#cpl-t');
+    const q = token ? '?token=' + encodeURIComponent(token) : '';
+    const load = async () => {
+      try {
+        const rows = await api('GET', `orders/${Number(orderId)}/complaints${q}`);
+        list.innerHTML = rows.length ? '<div class="meta" style="margin:10px 0 6px">Khiếu nại đã gửi</div>' + rows.map(r => {
+          const [label, tone] = COMPLAINT_STATUS[r.status] || ['', ''];
+          return `<div class="card" style="margin-bottom:8px"><div class="row"><span class="meta">${esc(fmtTime(r.created_at))}</span><span class="tag ${tone}">${label}</span></div>
+            <p style="margin:6px 0 0">${esc(r.content)}</p>${r.admin_reply ? `<p style="margin:8px 0 0"><b>Phản hồi:</b> ${esc(r.admin_reply)}</p>` : ''}</div>`;
+        }).join('') : '';
+        const busy = rows.some(r => r.status !== 'CLOSED');       // đang có khiếu nại chưa đóng thì chưa gửi thêm được
+        box.hidden = ok.hidden = busy;
+      } catch (e) { list.innerHTML = `<div class="err">${esc(e.message)}</div>`; box.hidden = ok.hidden = true; }
+    };
+    ok.onclick = async () => {
+      err.textContent = ''; const content = ta.value.trim();
+      if (content.length < 10) { err.textContent = 'Vui lòng mô tả rõ hơn (ít nhất 10 ký tự).'; return; }
+      ok.disabled = true;
+      try { await api('POST', `orders/${Number(orderId)}/complaints`, {content, token}); ta.value = ''; toast('Đã gửi khiếu nại'); if (onSent) onSent(); }
+      catch (e) { err.textContent = e.message; }
+      ok.disabled = false; await load();
+    };
+    await load();
+  };
+
   // ===== Thanh công cụ chung =====
   // Hai khu vực của sản phẩm: "Người dùng" (khách gọi món) và "Chủ quán".
   // Mục quản lý của chủ quán chỉ hiện khi phiên đăng nhập là chủ quán.
   const SECTIONS = {
-    customer: [['customer/home.html', 'Gọi món tại bàn'], ['customer/cart.html', 'Giỏ hàng'], ['customer/orders.html', 'Đơn hàng'], ['customer/profile.html', 'Hồ sơ']],
+    customer: [['customer/home.html', 'Gọi món tại bàn'], ['customer/cart.html', 'Giỏ hàng'], ['customer/orders.html', 'Đơn hàng'], ['customer/history.html', 'Lịch sử'], ['customer/profile.html', 'Hồ sơ']],
     merchant: [['merchant/dashboard.html', 'Tổng quan'], ['merchant/orders.html', 'Đơn hàng'], ['merchant/menu.html', 'Thực đơn'], ['merchant/tables.html', 'Bàn & QR'], ['merchant/bills.html', 'Tính tiền bàn'], ['merchant/revenue.html', 'Doanh thu'], ['merchant/coupons.html', 'Mã giảm giá'], ['merchant/reviews.html', 'Đánh giá'], ['merchant/shop.html', 'Hồ sơ quán']]
   };
   const linkTo = ([p, t]) => `<a href="${rootUrl()}${p}"${location.pathname.endsWith('/' + p) ? ' class="on" aria-current="page"' : ''}>${t}${p === 'customer/cart.html' ? '<span class="badge-n" id="cart-n"></span>' : ''}</a>`;
@@ -126,5 +165,5 @@ const QO = (() => {
 
   return {api, all, get, by, put, del, isOpenNow, isAccepting, isOrderable, validateSelection, qrUrl, STATUS, ORDER_STATUS, PAY_METHOD,
     esc, money, norm, hash, toast, param, parseTime, fmtTime, tableLabel, session, logout, requireOwner, myShop, getCart, setCart, getGuest, setGuest, clearGuest,
-    getOrders, saveOrders, addOrder, header};
+    getOrders, saveOrders, addOrder, complaintDialog, COMPLAINT_STATUS, header};
 })();
