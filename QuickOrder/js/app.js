@@ -39,6 +39,8 @@ const QO = (() => {
   const param = k => new URLSearchParams(location.search).get(k);
   // created_at do server ghi theo giờ UTC dạng "YYYY-MM-DD HH:MM:SS"
   const parseTime = s => new Date(String(s).replace(' ', 'T') + 'Z');
+  // Nhãn bàn: thêm chữ "Bàn" nếu tên chưa có (chủ quán có thể đặt tên "5" hoặc "Bàn 5")
+  const tableLabel = n => { n = String(n == null ? '' : n).trim(); return /^bàn(\s|$)/i.test(n) ? n : 'Bàn ' + n; };
   const fmtTime = s => { const d = parseTime(s); return isNaN(d) ? '' : d.toLocaleString('vi-VN', {hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit'}); };
 
   // Đường dẫn: các trang nằm trong thư mục customer/, merchant/, admin/ phải lùi một cấp để về trang chủ
@@ -123,6 +125,6 @@ const QO = (() => {
   };
 
   return {api, all, get, by, put, del, isOpenNow, isAccepting, isOrderable, validateSelection, qrUrl, STATUS, ORDER_STATUS, PAY_METHOD,
-    esc, money, norm, hash, toast, param, parseTime, fmtTime, session, logout, requireOwner, myShop, getCart, setCart, getGuest, setGuest, clearGuest,
+    esc, money, norm, hash, toast, param, parseTime, fmtTime, tableLabel, session, logout, requireOwner, myShop, getCart, setCart, getGuest, setGuest, clearGuest,
     getOrders, saveOrders, addOrder, header};
 })();
