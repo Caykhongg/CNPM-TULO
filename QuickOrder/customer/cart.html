@@ -8,6 +8,9 @@
     <aside class="card" id="checkout">
       <h2>Tóm tắt</h2>
       <div id="sum"></div>
+      <div class="field" style="margin-top:14px"><span>Mã giảm giá</span>
+        <div class="row" style="gap:8px"><input id="cp" maxlength="20" placeholder="Nhập mã" autocomplete="off" style="text-transform:uppercase;flex:1;min-width:0"><button class="btn ghost sm" type="button" id="cpok">Áp dụng</button></div>
+        <div class="meta" id="cpmsg" style="margin-top:6px" role="status"></div></div>
       <h2 style="margin-top:20px">Nhận món</h2>
       <p class="meta" id="where" style="margin:0 0 12px"></p>
       <label class="field"><span>Họ tên</span><input name="name" autocomplete="name" maxlength="60" placeholder="Tên người gọi món"></label>
@@ -31,6 +34,8 @@ QO.header('customer');
   const nameEl = document.querySelector('input[name="name"]'), noteEl = document.querySelector('textarea[name="note"]');
   const PAYS = [['CASH', 'Tiền mặt'], ['TRANSFER', 'Chuyển khoản / QR']];
   let shop = null, tb = null, method = 'CASH', sending = false;
+  let coupon = '', quote = null;                    // mã đang áp dụng và kết quả tính thử của server (giảm giá do server tính)
+  const cpEl = document.getElementById('cp'), cpMsg = document.getElementById('cpmsg'), cpBtn = document.getElementById('cpok');
   let groups = [], opts = [], editing = null;       // nhóm và tùy chọn của các món trong giỏ, để sửa tùy chọn
   const groupsOf = id => groups.filter(g => g.dish_id === id && opts.some(o => o.group_id === g.id)), optsOf = g => opts.filter(o => o.group_id === g.id);
 
@@ -48,6 +53,37 @@ QO.header('customer');
       : /^https?:\/\//i.test(img) ? ` · <a href="${QO.esc(img)}" target="_blank" rel="noopener">Xem mã QR</a>` : '';
     payEl.innerHTML = info + qr;
   };
+
+  const renderSum = (total, count) => {
+    const d = quote ? quote.discount : 0;
+    sum.innerHTML = `<div class="kv"><span>Số món</span><b>${count}</b></div>` + (d ? `
+      <div class="kv"><span>Tạm tính</span><span>${QO.money(total)}</span></div>
+      <div class="kv"><span>Giảm giá (${QO.esc(quote.coupon_code)})</span><b style="color:var(--ok,#15803d)">−${QO.money(d)}</b></div>` : '') + `
+      <div class="row" style="margin-top:12px"><b>Tổng cộng</b><span class="price" style="font-size:20px">${QO.money(total - d)}</span></div>`;
+  };
+
+  // Hỏi server giảm bao nhiêu cho giỏ hiện tại; giỏ đổi thì tính lại, mã hết hợp lệ thì bỏ mã và báo lý do
+  let qSeq = 0;
+  const requote = async (c = QO.getCart(), say = false) => {
+    if (!coupon || !c.items.length) { quote = null; return; }
+    const seq = ++qSeq;
+    try {
+      const r = await QO.api('POST', 'orders/quote', {shop_id: c.shop_id, coupon_code: coupon,
+        items: c.items.map(i => ({dish_id: i.dish_id, quantity: i.qty, option_ids: i.options.map(o => o.id)}))});
+      if (seq !== qSeq) return;
+      quote = r; cpMsg.textContent = 'Đã áp dụng mã ' + r.coupon_code + ': giảm ' + QO.money(r.discount) + '.';
+    } catch (e) {
+      if (seq !== qSeq) return;
+      quote = null; coupon = ''; cpMsg.textContent = e.message;
+    }
+    renderSum(c.items.reduce((s, i) => s + line(i), 0), c.items.reduce((s, i) => s + i.qty, 0));
+  };
+  cpBtn.onclick = () => {
+    coupon = cpEl.value.trim().toUpperCase(); quote = null;
+    if (!coupon) { cpMsg.textContent = ''; draw(); return; }
+    cpMsg.textContent = 'Đang kiểm tra...'; requote();
+  };
+  cpEl.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); cpBtn.click(); } };
 
   const draw = () => {
     const c = QO.getCart();
@@ -76,8 +112,8 @@ QO.header('customer');
         </div>
       </div>`).join('') + '</div><div style="margin-top:12px"><button class="btn ghost sm" type="button" id="clear">Xóa toàn bộ giỏ</button></div>';
 
-    sum.innerHTML = `<div class="kv"><span>Số món</span><b>${count}</b></div>
-      <div class="row" style="margin-top:12px"><b>Tổng cộng</b><span class="price" style="font-size:20px">${QO.money(total)}</span></div>`;
+    renderSum(total, count);
+    requote(c);
 
     whereEl.innerHTML = tb ? `Tại bàn: <b>${QO.esc(QO.tableLabel(tb.table_number))}</b>` : 'Chưa xác định bàn. Hãy dùng camera điện thoại quét lại mã QR trên bàn.';
     paysEl.innerHTML = PAYS.map(([v, t]) => `<button type="button" class="chip${method === v ? ' on' : ''}" data-pay="${v}">${t}</button>`).join('');
@@ -139,6 +175,7 @@ QO.header('customer');
         customer_name: (nameEl.value || '').trim() || 'Khách tại bàn',
         payment_method: method,
         note: noteEl.value.trim(),
+        coupon_code: quote ? quote.coupon_code : '',
         items: c.items.map(i => ({dish_id: i.dish_id, quantity: i.qty, option_ids: i.options.map(o => o.id)})),
       });
       // Lưu mã riêng của đơn trên thiết bị này để xem và hủy đơn sau này (server chỉ trả mã này một lần)

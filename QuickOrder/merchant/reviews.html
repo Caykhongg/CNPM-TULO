@@ -1,0 +1,20 @@
+<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>QuickOrder - Chủ quán</title><link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="../css/style.css"><script src="../js/app.js"></script></head><body>
+<div class="wrap"><h1>Đánh giá của khách</h1><p class="sub">Khách đánh giá sau khi đơn hoàn thành. Mới nhất ở trên.</p><div id="root"></div></div>
+<script>
+QO.header('merchant');
+(async () => { await QO.requireOwner(); const shop = await QO.myShop(), root = document.getElementById('root');
+  if (!shop) { root.innerHTML = '<div class="empty"><b>Bạn chưa tạo quán</b><a class="btn" href="shop.html">Tạo quán</a></div>'; return; }
+  const stars = n => '★'.repeat(n) + '☆'.repeat(5 - n);
+  let star = '';
+  const load = async () => { const r = await QO.api('GET', 'reviews?shop_id=' + shop.id + (star ? '&rating=' + star : '') + '&limit=100');
+    const max = Math.max(1, ...Object.values(r.distribution));
+    root.innerHTML = `<div class="card" style="margin-bottom:14px"><div class="row"><div><span class="price" style="font-size:32px">${r.count ? r.average.toFixed(1) : '–'}</span> <span class="meta">/ 5 · ${r.count} đánh giá</span></div></div>
+      ${[5,4,3,2,1].map(n => `<div class="row" style="gap:8px;margin-top:6px"><span style="width:34px">${n}★</span><div style="flex:1;background:var(--line);border-radius:6px;height:8px"><div style="width:${100 * r.distribution[n] / max}%;height:8px;border-radius:6px;background:currentColor;color:var(--brand,#e8590c)"></div></div><span class="meta" style="width:28px;text-align:right">${r.distribution[n]}</span></div>`).join('')}</div>
+      <div class="chips" id="fl"><button class="chip${star ? '' : ' on'}" data-s="">Tất cả</button>${[5,4,3,2,1].map(n => `<button class="chip${star == n ? ' on' : ''}" data-s="${n}">${n}★</button>`).join('')}</div>
+      <div class="list" style="margin-top:12px">${r.reviews.length ? r.reviews.map(v => `<article class="item" style="display:block"><div class="row"><b>${QO.esc(v.customer_name || 'Khách')}${v.table_number ? ' · ' + QO.esc(QO.tableLabel(v.table_number)) : ''}</b><span class="meta">${QO.esc(QO.fmtTime(v.created_at))} · Đơn #${v.order_id}</span></div>
+        <div style="color:#d97706;font-size:18px" aria-label="${v.rating} sao">${stars(v.rating)}</div>
+        ${v.comment ? `<p style="margin:6px 0 0">${QO.esc(v.comment)}</p>` : ''}
+        ${v.dishes.length ? `<div class="meta" style="margin-top:6px">${v.dishes.map(d => QO.esc(d.name) + ' ' + d.rating + '★').join(' · ')}</div>` : ''}</article>`).join('') : '<div class="empty"><b>Chưa có đánh giá</b></div>'}</div>`; };
+  root.onclick = e => { const b = e.target.closest('[data-s]'); if (b) { star = b.dataset.s; load(); } };
+  load(); })();
+</script></body></html>

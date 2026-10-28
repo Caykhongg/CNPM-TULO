@@ -110,6 +110,8 @@ CREATE TABLE IF NOT EXISTS orders (
     total_amount INTEGER NOT NULL DEFAULT 0 CHECK (total_amount >= 0),
     access_hash TEXT NOT NULL DEFAULT '',          -- băm SHA-256 của mã riêng của đơn (khách dùng để xem và hủy)
     cancel_reason TEXT NOT NULL DEFAULT '',        -- lý do hủy đơn
+    coupon_code TEXT NOT NULL DEFAULT '',          -- mã giảm giá đã dùng (rỗng nếu không dùng)
+    discount_amount INTEGER NOT NULL DEFAULT 0,    -- số tiền đã giảm; total_amount là số tiền khách phải trả sau giảm
     note TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (shop_id) REFERENCES shops(id)
@@ -155,3 +157,59 @@ CREATE TABLE IF NOT EXISTS pending_signups (
     window_start INTEGER NOT NULL,        -- đầu cửa sổ 1 giờ đang đếm số lần gửi
     sent_in_window INTEGER NOT NULL DEFAULT 0
 );
+
+-- Mã giảm giá của quán (FR-46). Giảm theo phần trăm hoặc số tiền; ngày để trống nghĩa là không giới hạn;
+-- max_uses = 0 nghĩa là không giới hạn số lượt. Mã không phân biệt hoa thường và duy nhất trong một quán.
+CREATE TABLE IF NOT EXISTS coupons (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    shop_id INTEGER NOT NULL,
+    code TEXT NOT NULL COLLATE NOCASE,
+    discount_type TEXT NOT NULL CHECK (discount_type IN ('PERCENT', 'AMOUNT')),
+    discount_value INTEGER NOT NULL CHECK (discount_value > 0),
+    min_order INTEGER NOT NULL DEFAULT 0 CHECK (min_order >= 0),
+    start_date TEXT NOT NULL DEFAULT '',          -- YYYY-MM-DD (giờ Việt Nam) hoặc rỗng
+    end_date TEXT NOT NULL DEFAULT '',            -- YYYY-MM-DD, dùng được hết ngày này
+    max_uses INTEGER NOT NULL DEFAULT 0 CHECK (max_uses >= 0),
+    used_count INTEGER NOT NULL DEFAULT 0 CHECK (used_count >= 0),
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (shop_id, code),
+    FOREIGN KEY (shop_id) REFERENCES shops(id)
+        ON UPDATE CASCADE ON DELETE CASCADE
+);
+
+-- Đánh giá của khách (FR-24): mỗi đơn hoàn thành đánh giá một lần (BR-09).
+-- rating là điểm cho quán; review_dishes là điểm riêng cho từng món trong đơn (không bắt buộc).
+CREATE TABLE IF NOT EXISTS reviews (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id INTEGER NOT NULL UNIQUE,
+    shop_id INTEGER NOT NULL,
+    rating INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
+    comment TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (order_id) REFERENCES orders(id)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+    FOREIGN KEY (shop_id) REFERENCES shops(id)
+        ON UPDATE CASCADE ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS review_dishes (
+    review_id INTEGER NOT NULL,
+    dish_id INTEGER NOT NULL,
+    rating INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
+    PRIMARY KEY (review_id, dish_id),
+    FOREIGN KEY (review_id) REFERENCES reviews(id)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+    FOREIGN KEY (dish_id) REFERENCES dishes(id)
+        ON UPDATE CASCADE ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_reviews_shop
+    ON reviews(shop_id, id);
+
+CREATE INDEX IF NOT EXISTS idx_review_dishes_dish
+    ON review_dishes(dish_id);
+
+-- Tính tiền theo bàn (FR-45) tìm các đơn chưa thanh toán của một bàn.
+CREATE INDEX IF NOT EXISTS idx_orders_table_unpaid
+    ON orders(table_id, payment_status);
