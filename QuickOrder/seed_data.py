@@ -197,18 +197,46 @@ def make_orders():
     return rows
 
 
+# Mã giảm giá mẫu cho mỗi quán (FR-46): một mã phần trăm, một mã số tiền, một mã đã hết hạn
+COUPONS = {}
+for key, sid in shop.items():
+    for code, typ, val, minimum, end in (("WELCOME10", "PERCENT", 10, 50000, ""), ("GIAM20K", "AMOUNT", 20000, 100000, ""),
+                                         ("TET2025", "PERCENT", 15, 0, "2025-02-10")):
+        COUPONS[(sid, code)] = conn.execute(
+            "INSERT INTO coupons(shop_id,code,discount_type,discount_value,min_order,end_date) VALUES (?,?,?,?,?,?)",
+            (sid, code, typ, val, minimum, end)).lastrowid
+REVIEW_TEXT = ["Đồ ăn ngon, lên món nhanh.", "Quán sạch sẽ, nhân viên thân thiện.", "Hơi chờ lâu nhưng món ngon.",
+               "Giá hợp lý, sẽ quay lại.", "Món mặn quá một chút.", "", "", "Phục vụ chậm, món nguội."]
+
 for t, sid, tid, guest, status, method, paid, total, reason, items in make_orders():
     utc = t.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    code, discount = "", 0
+    if status != "CANCELLED" and rnd.random() < 0.15:           # một phần đơn dùng mã; tổng tiền = tạm tính - giảm giá
+        for c_code, typ, val, minimum in (("GIAM20K", "AMOUNT", 20000, 100000), ("WELCOME10", "PERCENT", 10, 50000)):
+            if total >= minimum:
+                code, discount = c_code, min(total, val if typ == "AMOUNT" else total * val // 100)
+                break
     oid = conn.execute(
         """INSERT INTO orders(shop_id,table_id,customer_name,status,payment_method,payment_status,total_amount,
-                              access_hash,cancel_reason,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)""",
-        (sid, tid, guest, status, method, paid, total, hashlib.sha256(secrets.token_bytes(16)).hexdigest(), reason, utc)).lastrowid
+                              access_hash,cancel_reason,created_at,coupon_code,discount_amount) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+        (sid, tid, guest, status, method, paid, total - discount, hashlib.sha256(secrets.token_bytes(16)).hexdigest(), reason, utc,
+         code, discount)).lastrowid
     conn.executemany("INSERT INTO order_items(order_id,dish_id,quantity,unit_price,note) VALUES (?,?,?,?,?)",
                      [(oid, d, q, u, n) for d, q, u, n in items])
+    if code:
+        conn.execute("UPDATE coupons SET used_count = used_count + 1 WHERE id = ?", (COUPONS[(sid, code)],))
+    if status == "COMPLETED" and rnd.random() < 0.45:           # khách đánh giá một phần đơn đã hoàn thành
+        stars = rnd.choices([5, 4, 3, 2, 1], [45, 30, 14, 8, 3])[0]
+        rid = conn.execute("INSERT INTO reviews(order_id,shop_id,rating,comment,created_at) VALUES (?,?,?,?,?)",
+                           (oid, sid, stars, rnd.choice(REVIEW_TEXT), utc)).lastrowid
+        for d, q, u, n in items:
+            if rnd.random() < 0.5:
+                conn.execute("INSERT OR IGNORE INTO review_dishes(review_id,dish_id,rating) VALUES (?,?,?)",
+                             (rid, d, max(1, min(5, stars + rnd.choice([-1, 0, 0, 1])))))
 
 conn.commit()
 print("Đã nạp dữ liệu vào", DB)
-for t in ["users", "shops", "shop_tables", "categories", "dishes", "option_groups", "options", "orders", "order_items"]:
+for t in ["users", "shops", "shop_tables", "categories", "dishes", "option_groups", "options", "orders", "order_items", "coupons", "reviews"]:
     print(f"  {t:14}{conn.execute(f'SELECT COUNT(*) FROM {t}').fetchone()[0]:>5}")
 print("  đơn theo trạng thái:", dict(conn.execute("SELECT status, COUNT(*) FROM orders GROUP BY status").fetchall()))
 print(f"\nMật khẩu chung: {PASSWORD}  |  admin@quickorder.vn, owner1@quickorder.vn, khach1@quickorder.vn")

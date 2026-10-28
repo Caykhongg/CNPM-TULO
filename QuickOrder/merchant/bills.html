@@ -1,0 +1,21 @@
+<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>QuickOrder - Chủ quán</title><link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="../css/style.css"><script src="../js/app.js"></script></head><body>
+<div class="wrap"><h1>Tính tiền theo bàn</h1><p class="sub">Các bàn còn đơn chưa thanh toán (không tính đơn đã hủy). Thu tiền xong, bấm "Đã thu tiền" để ghi nhận cả bàn.</p><div id="root"></div></div>
+<script>
+QO.header('merchant');
+(async () => { await QO.requireOwner(); const shop = await QO.myShop(), root = document.getElementById('root');
+  if (!shop) { root.innerHTML = '<div class="empty"><b>Bạn chưa tạo quán</b><a class="btn" href="shop.html">Tạo quán</a></div>'; return; }
+  const bill = b => `<article class="card" style="margin-bottom:14px"><div class="row"><h2 style="margin:0">${b.table_id ? QO.esc(QO.tableLabel(b.table_number)) : 'Không rõ bàn'}</h2><span class="price" style="font-size:20px">${QO.money(b.total)}</span></div>
+    ${b.discount ? `<div class="meta">Đã trừ giảm giá ${QO.money(b.discount)}</div>` : ''}
+    ${b.orders.map(o => `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)"><div class="row"><b>Đơn #${o.id}</b><span class="meta">${QO.esc(QO.ORDER_STATUS[o.status][0])} · ${QO.esc(QO.fmtTime(o.created_at))} · ${QO.esc(QO.PAY_METHOD[o.payment_method] || '')}</span><span>${QO.money(o.total_amount)}</span></div>
+      <ul style="margin:6px 0 0;padding-left:18px">${o.items.map(i => `<li>${i.quantity} × ${QO.esc(i.dish_name)}${i.note ? ` <span class="meta">(${QO.esc(i.note)})</span>` : ''}</li>`).join('')}</ul>
+      ${o.coupon_code ? `<div class="meta">Mã ${QO.esc(o.coupon_code)}: −${QO.money(o.discount_amount)}</div>` : ''}</div>`).join('')}
+    ${b.table_id ? `<div style="margin-top:14px"><button class="btn" data-settle="${b.table_id}">Đã thu tiền ${QO.money(b.total)}</button></div>` : '<div class="meta" style="margin-top:10px">Đơn không gắn bàn: ghi nhận thanh toán ở trang Đơn hàng.</div>'}</article>`;
+  const draw = async () => { try { const bs = await QO.api('GET', 'shops/' + shop.id + '/bills');
+    root.innerHTML = bs.length ? bs.map(bill).join('') : '<div class="empty"><b>Không có bàn nào cần thu tiền</b></div>'; }
+    catch (x) { root.innerHTML = '<div class="err">' + QO.esc(x.message) + '</div>'; } };
+  root.onclick = async e => { const b = e.target.closest('[data-settle]'); if (!b) return;
+    if (!confirm('Xác nhận đã thu đủ tiền của bàn này?')) return; b.disabled = true;
+    try { const r = await QO.api('POST', 'tables/' + b.dataset.settle + '/settle', {}); QO.toast('Đã thu ' + QO.money(r.total) + ' (' + r.settled + ' đơn)'); }
+    catch (x) { QO.toast(x.message); } draw(); };
+  draw(); setInterval(() => { if (!document.hidden) draw(); }, 15000); })();
+</script></body></html>

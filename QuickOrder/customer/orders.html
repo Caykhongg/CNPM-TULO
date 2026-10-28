@@ -5,6 +5,12 @@
   <div class="chips" id="chips" aria-label="Lọc theo trạng thái"></div>
   <div id="list" style="margin-top:14px"><div class="empty"><b>Đang tải...</b></div></div>
 </div>
+<dialog id="rv"><form method="dialog" id="rvf"><h2 id="rvt">Đánh giá đơn</h2>
+  <div class="field"><span>Chấm điểm quán</span><div class="chips" id="rvs" role="radiogroup" aria-label="Điểm từ 1 đến 5 sao"></div></div>
+  <div id="rvd"></div>
+  <label class="field"><span>Nhận xét (không bắt buộc)</span><textarea id="rvc" rows="3" maxlength="500" placeholder="Món ăn, phục vụ, thời gian chờ..."></textarea></label>
+  <div class="err" id="rve"></div>
+  <div class="row" style="margin-top:12px"><button class="btn ghost" value="x">Để sau</button><button class="btn" id="rvok" value="ok">Gửi đánh giá</button></div></form></dialog>
 <script>
 QO.header('customer');
 (async () => {
@@ -38,6 +44,9 @@ QO.header('customer');
     const [label, tone] = QO.ORDER_STATUS[o.status] || ['Không rõ', ''];
     const items = o.items.map(i => `<li>${i.quantity} × ${QO.esc(i.dish_name)}${i.note ? ` <span class="meta">(${QO.esc(i.note)})</span>` : ''}</li>`).join('');
     const pay = `${QO.PAY_METHOD[o.payment_method] || ''} · ${o.payment_status === 'PAID' ? 'Đã thanh toán' : 'Chưa thanh toán'}`;
+    const rate = o.status === 'COMPLETED' ? (o.reviewed
+      ? '<div class="meta" style="margin-top:10px">Bạn đã đánh giá đơn này. Cảm ơn bạn!</div>'
+      : `<div style="margin-top:10px"><button class="btn sm" data-review="${o.id}">Đánh giá đơn</button></div>`) : '';
     const cancel = o.status === 'PENDING' ? `<div style="margin-top:10px"><button class="btn bad sm" data-cancel="${o.id}">Hủy đơn</button></div>` : '';
     const reason = o.status === 'CANCELLED' && o.cancel_reason ? `<div class="meta" style="margin-top:6px">Lý do: ${QO.esc(o.cancel_reason)}</div>` : '';
     return `<article class="item" style="display:block">
@@ -48,8 +57,9 @@ QO.header('customer');
       <ul style="margin:10px 0 6px;padding-left:18px">${items}</ul>
       ${o.note ? `<div class="meta">Ghi chú: ${QO.esc(o.note)}</div>` : ''}
       <div class="row" style="margin-top:8px"><span class="meta">${pay}</span><span class="price">${QO.money(o.total_amount)}</span></div>
+      ${o.discount_amount ? `<div class="meta" style="margin-top:4px">Đã giảm ${QO.money(o.discount_amount)} (mã ${QO.esc(o.coupon_code)})</div>` : ''}
       ${reason}
-      ${cancel}
+      ${cancel}${rate}
     </article>`;
   };
 
@@ -68,7 +78,47 @@ QO.header('customer');
 
   chipsEl.onclick = e => { const b = e.target.closest('[data-f]'); if (b) { filter = b.dataset.f; draw(QO.getOrders()); } };
 
+  // ----- Đánh giá đơn đã hoàn thành (FR-24) -----
+  const rv = document.getElementById('rv'), rvs = document.getElementById('rvs'), rve = document.getElementById('rve');
+  let reviewing = null, stars = 0, dishStars = {};
+  const starBtns = (cur, attr) => [1, 2, 3, 4, 5].map(n => `<button type="button" class="chip${cur === n ? ' on' : ''}" ${attr}="${n}" role="radio" aria-checked="${cur === n}" aria-label="${n} sao">${n}★</button>`).join('');
+  const drawRv = () => {
+    rvs.innerHTML = starBtns(stars, 'data-s');
+    document.getElementById('rvd').innerHTML = reviewing.items.length > 1 ? '<div class="meta" style="margin-bottom:6px">Chấm riêng từng món (không bắt buộc)</div>' + reviewing.items.map(i =>
+      `<div class="field"><span>${QO.esc(i.dish_name)}</span><div class="chips" data-dish="${i.dish_id}" style="margin:0">${starBtns(dishStars[i.dish_id] || 0, 'data-ds')}</div></div>`).join('') : '';
+  };
+  rvs.onclick = e => { const b = e.target.closest('[data-s]'); if (b) { stars = Number(b.dataset.s); drawRv(); } };
+  document.getElementById('rvd').onclick = e => {
+    const b = e.target.closest('[data-ds]'); if (!b) return;
+    const id = Number(b.closest('[data-dish]').dataset.dish), n = Number(b.dataset.ds);
+    if (dishStars[id] === n) delete dishStars[id]; else dishStars[id] = n;          // bấm lại để bỏ chọn
+    drawRv();
+  };
+  document.getElementById('rvok').onclick = async e => {
+    e.preventDefault(); rve.textContent = '';
+    if (!stars) { rve.textContent = 'Vui lòng chọn số sao cho quán.'; return; }
+    const saved = QO.getOrders().find(x => x.id === reviewing.id);
+    const btn = e.currentTarget; btn.disabled = true;
+    try {
+      await QO.api('POST', 'orders/' + reviewing.id + '/review', {token: saved ? saved.token : '', rating: stars,
+        comment: document.getElementById('rvc').value.trim(),
+        dishes: Object.entries(dishStars).map(([dish_id, rating]) => ({dish_id: Number(dish_id), rating}))});
+      rv.close(); QO.toast('Cảm ơn bạn đã đánh giá!');
+      cache.set(reviewing.id, {...reviewing, reviewed: true}); draw(QO.getOrders());
+    } catch (err) {
+      if (err.name === 'ConstraintError' && /đã được đánh giá/.test(err.message)) { rv.close(); cache.set(reviewing.id, {...reviewing, reviewed: true}); draw(QO.getOrders()); }
+      rve.textContent = err.message;
+    }
+    btn.disabled = false;
+  };
+
   listEl.onclick = async e => {
+    const rb = e.target.closest('[data-review]');
+    if (rb) {
+      reviewing = cache.get(Number(rb.dataset.review)); if (!reviewing) return;
+      stars = 0; dishStars = {}; rve.textContent = ''; document.getElementById('rvc').value = '';
+      document.getElementById('rvt').textContent = 'Đánh giá đơn #' + reviewing.id; drawRv(); rv.showModal(); return;
+    }
     const b = e.target.closest('[data-cancel]'); if (!b) return;
     if (!confirm('Hủy đơn này?')) return;
     const saved = QO.getOrders().find(x => x.id === Number(b.dataset.cancel));
