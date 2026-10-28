@@ -243,7 +243,7 @@ Khi thử trên máy chưa có khóa API, đặt `MAIL_CONSOLE=1`: mã xác nh�
 
 ## 🔑 Tài khoản demo
 
-Có sau khi chạy `python seed_data.py --reset`. Mật khẩu chung của mọi tài khoản demo: `Demo@1234`. Chỉ dùng để chạy thử, **không dùng trên máy chủ thật**.
+Có sau khi chạy `python seed_data.py --reset` (kèm khoảng 150 đơn mẫu trong 14 ngày và số tài khoản chuyển khoản của 3 quán, để xem ngay danh sách đơn và doanh thu). Mật khẩu chung của mọi tài khoản demo: `Demo@1234`. Chỉ dùng để chạy thử, **không dùng trên máy chủ thật**.
 
 Khách hàng không cần tài khoản để gọi món: chỉ cần mở đường dẫn QR của một bàn (chủ quán xem ở trang **Bàn và QR**).
 
@@ -261,16 +261,16 @@ Toàn bộ tài liệu nằm trong thư mục [`docs/`](./docs).
 
 | Tài liệu | Trạng thái |
 |---|---|
-| Danh sách chức năng | ✅ Hoàn thành; 17/49 chức năng Sprint 1 đã Hoàn thành ([xem file](docs/Danh_sach_chuc_nang_QuickOrder.xlsx)) |
+| Danh sách chức năng | ✅ Hoàn thành; 32/49 chức năng (Sprint 1 và 2) đã Hoàn thành ([xem file](docs/Danh_sach_chuc_nang_QuickOrder.xlsx)) |
 | Đặc tả yêu cầu phần mềm (SRS) | ✅ Bản 1.0, hoàn thành Sprint 0–1 ([xem file](docs/SRS_QuickOrder_v1.0.docx)) |
 | Use Case | ✅ Bản 1.0, hoàn thành Sprint 0–1 ([xem file](docs/UseCase_QuickOrder_v1.0.docx)) |
-| User Story | ✅ Hoàn thành; 17 story Sprint 1 đã Hoàn thành, bản 0.1 ([xem file](docs/UserStory_QuickOrder_v0.1.xlsx)) |
+| User Story | ✅ Hoàn thành; 33/51 story (Sprint 1 và 2) đã Hoàn thành, bản 0.1 ([xem file](docs/UserStory_QuickOrder_v0.1.xlsx)) |
 | Thiết kế CSDL (ERD) | ⬜ Chưa làm |
 | Class Diagram | ✅ Bản 1.0, hoàn thành Sprint 0–1 ([xem file](docs/ClassDiagram_QuickOrder_v1.0.docx)) |
 | Sequence Diagram | ✅ Bản 1.0, 9 luồng chính ([xem file](docs/SequenceDiagram_QuickOrder_v1.0.docx)) |
 | Wireframe (Figma) | 🔄 Đã có bản phác thảo 10 màn hình ([xem file](docs/Wireframe_QuickOrder_v1.0.docx)); chờ dựng trên Figma, thêm liên kết Figma khi xong |
 | Cấu trúc Route/API | ✅ Bản 1.0, 82 route và 12 endpoint JSON ([xem file](docs/RouteAPI_QuickOrder_v1.0.docx)) |
-| Test case và báo cáo kiểm thử | 🔄 Đã có test case [Sprint 1](QuickOrder_TestCases_Sprint1.docx) và [Sprint 2](QuickOrder_TestCases_Sprint2.docx); các ca Sprint 2 chưa ghi kết quả chạy; chưa có báo cáo kiểm thử. Test tự động nằm trong `QuickOrder/tests` |
+| Test case và báo cáo kiểm thử | 🔄 Đã có test case [Sprint 1](QuickOrder_TestCases_Sprint1.docx) và [Sprint 2](QuickOrder_TestCases_Sprint2.docx); Sprint 2: 16 ca Đạt, 2 ca không áp dụng (TC-073, TC-074: hệ thống không có trang tìm quán); chưa có báo cáo kiểm thử. Test tự động nằm trong `QuickOrder/tests` |
 
 ## 🤝 Quy trình làm việc nhóm
 
@@ -301,7 +301,7 @@ refactor: tách hàm tính giá
 |---|---|---|
 | 1–3 | ✅ **Sprint 0** | Chuẩn bị, phân tích và thiết kế (SRS, Use Case, ERD, wireframe...) |
 | 4–5 | ✅ **Sprint 1** | Nền tảng, menu và QR bàn: đăng ký/đăng nhập, phân quyền, quản lý quán, menu, bàn và mã QR, quét QR xem menu |
-| 6–7 | 🔄 **Sprint 2** (đang thực hiện) | Gọi món và xử lý đơn: giỏ hàng, gửi đơn, thanh toán, thông báo đơn mới, cập nhật trạng thái. Mã nguồn các chức năng này đã có; còn chạy test case và cập nhật tài liệu |
+| 6–7 | ✅ **Sprint 2** | Gọi món và xử lý đơn: giỏ hàng, gửi đơn, thanh toán, thông báo đơn mới, cập nhật trạng thái |
 | 8 | **Sprint 3** | Tính năng nâng cao: thống kê (đã làm sẵn phần doanh thu), mã giảm giá, đánh giá, lịch sử đơn, hoàn thiện trang Admin |
 | 9 | **Sprint 4** | Kiểm thử tổng thể, đo hiệu năng, sửa lỗi |
 | 10 | Hoàn thiện | Deploy, tài liệu hướng dẫn, báo cáo, slide, demo |
