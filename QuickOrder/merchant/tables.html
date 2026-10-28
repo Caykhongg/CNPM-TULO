@@ -10,7 +10,7 @@ QO.header('merchant');
   const item = t => `<div class="item" style="flex-wrap:wrap">
       <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
         <img data-qr="${t.id}" alt="Mã QR bàn ${QO.esc(t.table_number)}" width="120" height="120" style="border:1px solid var(--line);border-radius:10px;background:#fff">
-        <div><h3>Bàn ${QO.esc(t.table_number)}</h3><div class="link">${QO.esc(QO.qrUrl(t))}</div><div class="meta" data-qrerr="${t.id}"></div></div>
+        <div><h3>${QO.esc(QO.tableLabel(t.table_number))}</h3><div class="link">${QO.esc(QO.qrUrl(t))}</div><div class="meta" data-qrerr="${t.id}"></div></div>
       </div>
       <div class="acts"><a class="btn sm" data-dl="${t.id}" download="ban-${QO.esc(t.table_number)}.png" hidden>Tải mã QR</a><button class="btn ghost sm" data-cp="${t.id}">Sao chép</button><button class="btn warn sm" data-rg="${t.id}">Đổi mã</button><button class="btn bad sm" data-rm="${t.id}">Xóa</button></div></div>`;
 

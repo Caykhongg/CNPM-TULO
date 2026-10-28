@@ -52,7 +52,7 @@ QO.header('merchant');
 
   const card = o => {
     const [label, tone] = QO.ORDER_STATUS[o.status] || ['Không rõ', ''];
-    const table = o.table_id && tableNo[o.table_id] ? 'Bàn ' + tableNo[o.table_id] : 'Không rõ bàn';
+    const table = o.table_id && tableNo[o.table_id] ? QO.tableLabel(tableNo[o.table_id]) : 'Không rõ bàn';
     const items = o.items.map(i => `<li><b>${i.quantity} ×</b> ${QO.esc(i.dish_name)}${i.note ? `<div class="meta">${QO.esc(i.note)}</div>` : ''}</li>`).join('');
     const acts = (ACTIONS[o.status] || []).map(([to, t, k]) => `<button class="${k}" data-status="${to}" data-id="${o.id}">${t}</button>`).join('');
     const paid = o.payment_status === 'PAID';

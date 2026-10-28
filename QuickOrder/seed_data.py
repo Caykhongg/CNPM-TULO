@@ -1,6 +1,6 @@
 """
 seed_data.py - Nạp dữ liệu giả cho QuickOrder, khớp với schema.sql hiện tại của repo
-(bảng: users, shops, shop_tables, categories, dishes, option_groups, options).
+(bảng: users, shops, shop_tables, categories, dishes, option_groups, options, orders, order_items).
 
 Đặt file cùng thư mục với app.py / schema.sql rồi chạy:
     python seed_data.py --reset    # xóa database.db cũ, tạo lại từ schema.sql, nạp dữ liệu
@@ -15,10 +15,11 @@ Tài khoản demo - mật khẩu chung: Demo@1234 (>= 8 ký tự theo NFR-10)
 """
 import os
 import random
+import hashlib
 import secrets
 import sqlite3
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from werkzeug.security import generate_password_hash
 
@@ -128,9 +129,87 @@ for key, items in MENU.items():
             for oname, extra in opts:
                 conn.execute("INSERT INTO options(group_id,name,extra_price) VALUES (?,?,?)", (gid, oname, extra))
 
+# ------------------------------------------------------------------ thông tin chuyển khoản (FR-32)
+# Số tài khoản giả. Quán "Bún Chả 36" để trống để thử trường hợp quán chưa cập nhật.
+BANK = {"mayhong": "1900 1234 5678 - LE THI HONG - MB BANK", "gocpho": "0123 4567 8901 - TRINH VAN TAI - VIETCOMBANK",
+        "batu": "9704 0000 1111 - NGUYEN THI TU - TECHCOMBANK"}
+for key, acc in BANK.items():
+    conn.execute("UPDATE shops SET bank_account_number=? WHERE id=?", (acc, shop[key]))
+
+# ------------------------------------------------------------------ đơn hàng mẫu (để xem doanh thu, danh sách đơn, biểu đồ)
+# 14 ngày gần nhất cho 4 quán đã duyệt. Giờ tạo đơn lưu theo UTC (đúng như cột created_at của app), tính từ giờ Việt Nam.
+conn.row_factory = sqlite3.Row                      # truy cập cột theo tên
+rnd = random.Random(2026)
+VN = timezone(timedelta(hours=7))
+NOW_VN = datetime.now(VN).replace(microsecond=0)
+GUESTS = ["Khách tại bàn", "Khách tại bàn", "Minh", "Lan", "Hùng", "Trang", "Đức", "Mai", "Nam", "Thảo"]
+CANCEL_REASONS = ["Khách hủy đơn", "Hết nguyên liệu", "Khách đặt nhầm bàn", "Món vừa hết"]
+PER_DAY = {"mayhong": (2, 5), "gocpho": (2, 4), "batu": (1, 3), "buncha": (1, 3)}      # số đơn mỗi ngày
+LIVE_TODAY = {"mayhong": ["PENDING", "PENDING", "PREPARING", "COMPLETED", "COMPLETED"],   # đơn hôm nay: có đơn đang chờ để thử xử lý
+              "gocpho": ["PENDING", "PREPARING", "COMPLETED", "CANCELLED"],
+              "batu": ["PENDING", "COMPLETED"], "buncha": ["PREPARING", "COMPLETED"]}
+
+
+def pick_options(dish_id):
+    """Chọn tùy chọn hợp lệ cho một món: nhóm bắt buộc chọn đúng 1; nhóm tùy chọn chọn ngẫu nhiên."""
+    chosen = []
+    for gid, req, multi in conn.execute("SELECT id,is_required,is_multiple FROM option_groups WHERE dish_id=?", (dish_id,)).fetchall():
+        opts = conn.execute("SELECT name,extra_price FROM options WHERE group_id=? ORDER BY id", (gid,)).fetchall()
+        if not opts:
+            continue
+        if multi:
+            chosen += rnd.sample(opts, rnd.randint(0 if not req else 1, min(2, len(opts))))
+        elif req or rnd.random() < 0.6:
+            chosen.append(rnd.choice(opts))
+    return chosen
+
+
+def make_orders():
+    rows = []
+    for key, (lo, hi) in PER_DAY.items():
+        sid = shop[key]
+        tables = [r[0] for r in conn.execute("SELECT id FROM shop_tables WHERE shop_id=?", (sid,))]
+        dishes = conn.execute("SELECT id,name,price FROM dishes WHERE shop_id=? AND is_deleted=0 AND is_available=1", (sid,)).fetchall()
+        o_h, c_h = [int(x.split(":")[0]) for x in conn.execute("SELECT open_time,close_time FROM shops WHERE id=?", (sid,)).fetchone()]
+        has_bank = key in BANK
+        for day in range(14, -1, -1):
+            if day == 0:
+                statuses = LIVE_TODAY[key]
+                times = [NOW_VN - timedelta(minutes=rnd.randint(2, 150)) for _ in statuses]
+            else:
+                n = rnd.randint(lo, hi)
+                statuses = [rnd.choices(["COMPLETED", "CANCELLED"], [88, 12])[0] for _ in range(n)]
+                d0 = (NOW_VN - timedelta(days=day)).replace(hour=0, minute=0, second=0)
+                times = [d0 + timedelta(hours=rnd.randint(o_h, max(o_h, c_h - 1)), minutes=rnd.randint(0, 59)) for _ in statuses]
+            for status, t in zip(statuses, times):
+                items, total = [], 0
+                for dish in rnd.sample(dishes, min(rnd.choice([1, 1, 2, 3]), len(dishes))):
+                    opts = pick_options(dish["id"])
+                    unit = dish["price"] + sum(o["extra_price"] for o in opts)
+                    qty = rnd.choice([1, 1, 1, 2])
+                    items.append((dish["id"], qty, unit, ", ".join(o["name"] for o in opts)))
+                    total += qty * unit
+                method = "TRANSFER" if has_bank and rnd.random() < 0.3 else "CASH"
+                paid = "PAID" if status == "COMPLETED" and rnd.random() < 0.92 else "UNPAID"
+                rows.append((t, sid, rnd.choice(tables), rnd.choice(GUESTS), status, method, paid, total,
+                             rnd.choice(CANCEL_REASONS) if status == "CANCELLED" else "", items))
+    rows.sort(key=lambda r: r[0])                   # mã đơn tăng dần theo thời gian
+    return rows
+
+
+for t, sid, tid, guest, status, method, paid, total, reason, items in make_orders():
+    utc = t.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    oid = conn.execute(
+        """INSERT INTO orders(shop_id,table_id,customer_name,status,payment_method,payment_status,total_amount,
+                              access_hash,cancel_reason,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)""",
+        (sid, tid, guest, status, method, paid, total, hashlib.sha256(secrets.token_bytes(16)).hexdigest(), reason, utc)).lastrowid
+    conn.executemany("INSERT INTO order_items(order_id,dish_id,quantity,unit_price,note) VALUES (?,?,?,?,?)",
+                     [(oid, d, q, u, n) for d, q, u, n in items])
+
 conn.commit()
 print("Đã nạp dữ liệu vào", DB)
-for t in ["users", "shops", "shop_tables", "categories", "dishes", "option_groups", "options"]:
+for t in ["users", "shops", "shop_tables", "categories", "dishes", "option_groups", "options", "orders", "order_items"]:
     print(f"  {t:14}{conn.execute(f'SELECT COUNT(*) FROM {t}').fetchone()[0]:>5}")
+print("  đơn theo trạng thái:", dict(conn.execute("SELECT status, COUNT(*) FROM orders GROUP BY status").fetchall()))
 print(f"\nMật khẩu chung: {PASSWORD}  |  admin@quickorder.vn, owner1@quickorder.vn, khach1@quickorder.vn")
 conn.close()

@@ -698,7 +698,7 @@ def price_item(c, shop_id, item):
     chosen = sorted((options[i] for i in picked), key=lambda o: (o["group_id"], o["id"]))
     for g in groups:
         n = sum(1 for o in chosen if o["group_id"] == g["id"])
-        if g["is_required"] and n == 0:
+        if g["is_required"] and n == 0 and any(o["group_id"] == g["id"] for o in options.values()):   # nhóm chưa có tùy chọn thì không bắt buộc
             return None, f'Món {dish["name"]}: vui lòng chọn nhóm "{g["name"]}".'
         if not g["is_multiple"] and n > 1:
             return None, f'Món {dish["name"]}: nhóm "{g["name"]}" chỉ được chọn một.'

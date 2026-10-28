@@ -32,7 +32,7 @@ QO.header('customer');
   const PAYS = [['CASH', 'Tiền mặt'], ['TRANSFER', 'Chuyển khoản / QR']];
   let shop = null, tb = null, method = 'CASH', sending = false;
   let groups = [], opts = [], editing = null;       // nhóm và tùy chọn của các món trong giỏ, để sửa tùy chọn
-  const groupsOf = id => groups.filter(g => g.dish_id === id), optsOf = g => opts.filter(o => o.group_id === g.id);
+  const groupsOf = id => groups.filter(g => g.dish_id === id && opts.some(o => o.group_id === g.id)), optsOf = g => opts.filter(o => o.group_id === g.id);
 
   // Giá một phần = giá món + tùy chọn (khớp với giá server tính)
   const line = i => (i.price + i.options.reduce((s, o) => s + o.extra_price, 0)) * i.qty;
@@ -79,7 +79,7 @@ QO.header('customer');
     sum.innerHTML = `<div class="kv"><span>Số món</span><b>${count}</b></div>
       <div class="row" style="margin-top:12px"><b>Tổng cộng</b><span class="price" style="font-size:20px">${QO.money(total)}</span></div>`;
 
-    whereEl.innerHTML = tb ? `Tại bàn: <b>Bàn ${QO.esc(tb.table_number)}</b>` : 'Chưa xác định bàn. Hãy dùng camera điện thoại quét lại mã QR trên bàn.';
+    whereEl.innerHTML = tb ? `Tại bàn: <b>${QO.esc(QO.tableLabel(tb.table_number))}</b>` : 'Chưa xác định bàn. Hãy dùng camera điện thoại quét lại mã QR trên bàn.';
     paysEl.innerHTML = PAYS.map(([v, t]) => `<button type="button" class="chip${method === v ? ' on' : ''}" data-pay="${v}">${t}</button>`).join('');
     renderPay();
 

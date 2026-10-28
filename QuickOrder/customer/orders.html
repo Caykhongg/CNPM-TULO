@@ -42,7 +42,7 @@ QO.header('customer');
     const reason = o.status === 'CANCELLED' && o.cancel_reason ? `<div class="meta" style="margin-top:6px">Lý do: ${QO.esc(o.cancel_reason)}</div>` : '';
     return `<article class="item" style="display:block">
       <div class="row">
-        <div><h3>Đơn #${o.id} · ${QO.esc(s.shop_name || 'Quán')}</h3><div class="meta">Bàn ${QO.esc(s.table_number)} · ${QO.esc(QO.fmtTime(o.created_at))}</div></div>
+        <div><h3>Đơn #${o.id} · ${QO.esc(s.shop_name || 'Quán')}</h3><div class="meta">${QO.esc(QO.tableLabel(s.table_number))} · ${QO.esc(QO.fmtTime(o.created_at))}</div></div>
         <span class="tag ${tone}">${label}</span>
       </div>
       <ul style="margin:10px 0 6px;padding-left:18px">${items}</ul>
