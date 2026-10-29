@@ -101,6 +101,12 @@ def init_db():
         # FR-22: lưu id tùy chọn của từng dòng món để đặt lại đúng size/topping
         if "option_ids" not in columns(c, "order_items"):
             c.execute("ALTER TABLE order_items ADD COLUMN option_ids TEXT NOT NULL DEFAULT ''")
+        # FR-55 chuyển sang chủ quán; giữ nguyên phản hồi đã lưu trong CSDL cũ.
+        reply_columns = columns(c, "complaints")
+        if "owner_reply" not in reply_columns:
+            c.execute("ALTER TABLE complaints ADD COLUMN owner_reply TEXT NOT NULL DEFAULT ''")
+            if "admin_reply" in reply_columns:
+                c.execute("UPDATE complaints SET owner_reply = admin_reply")
 
 
 def columns(c, table):
@@ -929,18 +935,26 @@ def create_order():
             [(order_id, dish_id, qty, unit, line_note, opt_ids) for dish_id, qty, unit, line_note, opt_ids in lines])
         result = order_json(c, order_id)
     result["access_token"] = token
+    result["in_my_history"] = user_id is not None
     return jsonify(result), 201
 
 
 @app.get("/api/orders/<int:id>")
 def get_order(id):
-    """Chủ quán (hoặc admin) xem đơn của quán mình; khách xem bằng mã riêng của đơn (?token=). Còn lại: 404."""
+    """Khách xem đơn thuộc tài khoản hoặc bằng mã riêng; chủ quán xem đơn của quán mình. Còn lại: 404."""
     token = request.args.get("token", "")
     with db() as c:
-        row = c.execute("SELECT * FROM orders WHERE id = ?", (id,)).fetchone()
-        if not row or not (owns_order(c, row, current_user()) or token_ok(row, token)):
+        row = c.execute(
+            "SELECT o.*, s.name AS shop_name, t.table_number FROM orders o "
+            "JOIN shops s ON s.id = o.shop_id LEFT JOIN shop_tables t ON t.id = o.table_id WHERE o.id = ?",
+            (id,)).fetchone()
+        u = current_user()
+        mine = row and u and u["role"] == "customer" and row["user_id"] == u["id"]
+        if not row or not (mine or owns_order(c, row, u) or token_ok(row, token)):
             abort(404)                         # không phân biệt "không có" và "không được xem"
-        return jsonify(order_view(row, items_of(c, [id])[id], id in reviewed_ids(c, [id])))
+        result = order_view(row, items_of(c, [id])[id], id in reviewed_ids(c, [id]))
+        result["can_save_to_history"] = row["user_id"] is None
+        return jsonify(result)
 
 
 @app.get("/api/orders")
@@ -1407,6 +1421,24 @@ def my_order_detail(id):
         return jsonify(history_view(c, [my_order(c, id, u)])[0])
 
 
+@app.post("/api/my/orders/<int:id>/claim")
+def save_order_to_history(id):
+    """Khách chủ động lưu đơn ẩn danh bằng mã riêng; không thể chuyển đơn giữa tài khoản."""
+    u = login_required("customer")
+    token = text(json_body(), "token")
+    with db() as c:
+        c.execute("BEGIN IMMEDIATE")
+        row = c.execute("SELECT * FROM orders WHERE id = ?", (id,)).fetchone()
+        if not row or not token_ok(row, token):
+            abort(404)
+        if row["user_id"] is not None and row["user_id"] != u["id"]:
+            abort(404)
+        c.execute("UPDATE orders SET user_id = ? WHERE id = ? AND user_id IS NULL", (u["id"], id))
+        # Những khiếu nại ẩn danh của chính đơn này cũng theo tài khoản vừa nhận đơn.
+        c.execute("UPDATE complaints SET user_id = ? WHERE order_id = ? AND user_id IS NULL", (u["id"], id))
+        return jsonify(history_view(c, [my_order(c, id, u)])[0])
+
+
 def unavailable_reason(c, shop_id, dish_id):
     """Vì sao một dòng món không đặt lại được: món hết/ngừng bán, hay tùy chọn đã thay đổi."""
     d = c.execute("SELECT is_available, is_deleted FROM dishes WHERE id = ? AND shop_id = ?", (dish_id, shop_id)).fetchone()
@@ -1469,6 +1501,12 @@ def shop_suggestions(id):
 
 
 # ---------- Khiếu nại (FR-26) ----------
+def complaint_view(row):
+    result = out(row)
+    result.pop("admin_reply", None)          # cột cũ chỉ giữ để tương thích dữ liệu
+    return result
+
+
 def complaint_order(c, id, token):
     """Đơn mà người gọi được khiếu nại: khách đăng nhập là chủ đơn, hoặc khách giữ mã riêng của đơn. Còn lại: 404."""
     order = c.execute("SELECT * FROM orders WHERE id = ?", (id,)).fetchone()
@@ -1494,10 +1532,9 @@ def create_complaint(id):
             return jsonify(error="Đơn này đang có khiếu nại chưa được xử lý xong."), 409
         if len(rows) >= MAX_COMPLAINTS_PER_ORDER:
             return jsonify(error=f"Mỗi đơn chỉ được gửi tối đa {MAX_COMPLAINTS_PER_ORDER} khiếu nại."), 409
-        u = current_user()
         cid = c.execute("INSERT INTO complaints (order_id, shop_id, user_id, content) VALUES (?,?,?,?)",
-                        (id, order["shop_id"], u["id"] if u and u["role"] == "customer" else None, content)).lastrowid
-        return jsonify(out(c.execute("SELECT * FROM complaints WHERE id = ?", (cid,)).fetchone())), 201
+                        (id, order["shop_id"], order["user_id"], content)).lastrowid
+        return jsonify(complaint_view(c.execute("SELECT * FROM complaints WHERE id = ?", (cid,)).fetchone())), 201
 
 
 @app.get("/api/orders/<int:id>/complaints")
@@ -1506,7 +1543,7 @@ def order_complaints(id):
     with db() as c:
         complaint_order(c, id, request.args.get("token", ""))
         rows = c.execute("SELECT * FROM complaints WHERE order_id = ? ORDER BY id DESC", (id,)).fetchall()
-        return jsonify([out(r) for r in rows])
+        return jsonify([complaint_view(r) for r in rows])
 
 
 @app.get("/api/my/complaints")
@@ -1515,7 +1552,7 @@ def my_complaints():
     with db() as c:
         rows = c.execute("SELECT m.*, s.name AS shop_name FROM complaints m JOIN shops s ON s.id = m.shop_id "
                          "WHERE m.user_id = ? ORDER BY m.id DESC LIMIT 100", (u["id"],)).fetchall()
-        return jsonify([out(r) for r in rows])
+        return jsonify([complaint_view(r) for r in rows])
 
 
 # ---------- Doanh thu (FR-47, FR-48) ----------
@@ -1703,6 +1740,12 @@ register_admin_routes(
     login_required=login_required,
     json_body=json_body,
     out=out,
+)
+
+from complaint_api import register_complaint_routes
+
+register_complaint_routes(
+    app, db=db, login_required=login_required, json_body=json_body, out=complaint_view,
 )
 
 init_db()

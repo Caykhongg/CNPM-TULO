@@ -20,6 +20,7 @@
       <div class="err" id="err"></div>
       <button class="btn" type="button" id="order" disabled style="width:100%">Đặt hàng</button>
       <p class="meta" style="margin-top:10px">Đơn sẽ được gửi tới quán. Bạn theo dõi trạng thái ở mục Đơn hàng.</p>
+      <p class="meta" id="history-note" role="status"></p>
     </aside>
   </div>
 </div>
@@ -181,7 +182,7 @@ QO.header('customer');
       // Lưu mã riêng của đơn trên thiết bị này để xem và hủy đơn sau này (server chỉ trả mã này một lần)
       QO.addOrder({id: order.id, token: order.access_token, shop_id: order.shop_id, shop_name: shop.name, table_number: tb.table_number});
       QO.setCart({shop_id: null, table: null, items: []});
-      location.href = 'orders.html';
+      location.href = 'orders.html' + (who && who.role === 'customer' && !order.in_my_history ? '?history=missing' : '');
     } catch (e) {
       errEl.textContent = e.message;
       sending = false; draw();
@@ -200,6 +201,9 @@ QO.header('customer');
 
   // Điền sẵn họ tên từ tài khoản hoặc hồ sơ tạm (chỉ điền khi ô đang trống)
   const who = await QO.session();
+  document.getElementById('history-note').innerHTML = who && who.role === 'customer'
+    ? `Đơn sẽ được lưu vào lịch sử tài khoản ${QO.esc(who.full_name || who.email)}.`
+    : 'Bạn đang đặt đơn ngoài tài khoản khách. Đơn lưu trên thiết bị này; <a href="account.html">đăng nhập tài khoản khách</a> để lưu lịch sử trên mọi thiết bị.';
   const profile = who && who.role === 'customer' ? who : QO.getGuest();
   if (profile && nameEl && !nameEl.value) nameEl.value = profile.full_name || '';
 

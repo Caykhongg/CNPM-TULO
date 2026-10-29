@@ -95,7 +95,7 @@ const QO = (() => {
         list.innerHTML = rows.length ? '<div class="meta" style="margin:10px 0 6px">Khiếu nại đã gửi</div>' + rows.map(r => {
           const [label, tone] = COMPLAINT_STATUS[r.status] || ['', ''];
           return `<div class="card" style="margin-bottom:8px"><div class="row"><span class="meta">${esc(fmtTime(r.created_at))}</span><span class="tag ${tone}">${label}</span></div>
-            <p style="margin:6px 0 0">${esc(r.content)}</p>${r.admin_reply ? `<p style="margin:8px 0 0"><b>Phản hồi:</b> ${esc(r.admin_reply)}</p>` : ''}</div>`;
+            <p style="margin:6px 0 0">${esc(r.content)}</p>${(r.owner_reply || r.admin_reply) ? `<p style="margin:8px 0 0"><b>Phản hồi của quán:</b> ${esc(r.owner_reply || r.admin_reply)}</p>` : ''}</div>`;
         }).join('') : '';
         const busy = rows.some(r => r.status !== 'CLOSED');       // đang có khiếu nại chưa đóng thì chưa gửi thêm được
         box.hidden = ok.hidden = busy;
@@ -117,7 +117,7 @@ const QO = (() => {
   // Mục quản lý của chủ quán chỉ hiện khi phiên đăng nhập là chủ quán.
   const SECTIONS = {
     customer: [['customer/home.html', 'Gọi món tại bàn'], ['customer/cart.html', 'Giỏ hàng'], ['customer/orders.html', 'Đơn hàng'], ['customer/history.html', 'Lịch sử'], ['customer/profile.html', 'Hồ sơ']],
-    merchant: [['merchant/dashboard.html', 'Tổng quan'], ['merchant/orders.html', 'Đơn hàng'], ['merchant/menu.html', 'Thực đơn'], ['merchant/tables.html', 'Bàn & QR'], ['merchant/bills.html', 'Tính tiền bàn'], ['merchant/revenue.html', 'Doanh thu'], ['merchant/coupons.html', 'Mã giảm giá'], ['merchant/reviews.html', 'Đánh giá'], ['merchant/shop.html', 'Hồ sơ quán']]
+    merchant: [['merchant/dashboard.html', 'Tổng quan'], ['merchant/orders.html', 'Đơn hàng'], ['merchant/menu.html', 'Thực đơn'], ['merchant/tables.html', 'Bàn & QR'], ['merchant/bills.html', 'Tính tiền bàn'], ['merchant/revenue.html', 'Doanh thu'], ['merchant/coupons.html', 'Mã giảm giá'], ['merchant/reviews.html', 'Đánh giá'], ['merchant/complaints.html', 'Khiếu nại'], ['merchant/shop.html', 'Hồ sơ quán']]
   };
   const linkTo = ([p, t]) => `<a href="${rootUrl()}${p}"${location.pathname.endsWith('/' + p) ? ' class="on" aria-current="page"' : ''}>${t}${p === 'customer/cart.html' ? '<span class="badge-n" id="cart-n"></span>' : ''}</a>`;
   const guestLinks = () => `<a href="${rootUrl()}merchant/login.html">Đăng nhập</a><a href="${rootUrl()}merchant/login.html?mode=register">Đăng ký tài khoản</a>`;
