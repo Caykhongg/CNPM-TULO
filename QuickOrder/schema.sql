@@ -219,7 +219,7 @@ CREATE INDEX IF NOT EXISTS idx_orders_table_unpaid
     ON orders(table_id, payment_status);
 
 -- Khiếu nại về đơn hàng (FR-26). Khách có tài khoản gửi (user_id) hoặc khách ẩn danh gửi bằng mã riêng của đơn (user_id NULL).
--- Admin xử lý ở FR-55: phản hồi (REPLIED) rồi đóng (CLOSED). Mỗi đơn chỉ có một khiếu nại chưa đóng tại một thời điểm.
+-- Chủ quán xử lý khiếu nại của quán mình ở FR-55: phản hồi (REPLIED) rồi đóng (CLOSED). Mỗi đơn chỉ có một khiếu nại chưa đóng tại một thời điểm.
 CREATE TABLE IF NOT EXISTS complaints (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     order_id INTEGER NOT NULL,
@@ -227,7 +227,7 @@ CREATE TABLE IF NOT EXISTS complaints (
     user_id INTEGER,
     content TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN', 'REPLIED', 'CLOSED')),
-    admin_reply TEXT NOT NULL DEFAULT '',
+    owner_reply TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (order_id) REFERENCES orders(id)
@@ -243,3 +243,6 @@ CREATE INDEX IF NOT EXISTS idx_complaints_order
 
 CREATE INDEX IF NOT EXISTS idx_complaints_user
     ON complaints(user_id, id);
+
+CREATE INDEX IF NOT EXISTS idx_complaints_shop_status
+    ON complaints(shop_id, status, id);

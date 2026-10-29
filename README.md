@@ -65,8 +65,8 @@ flowchart LR
 | Vai trò | Mục tiêu sử dụng |
 |---|---|
 | **Khách hàng** (ngồi tại quán) | Quét QR, xem menu, gọi món nhanh, theo dõi đơn; không cần tài khoản |
-| **Chủ quán / nhân viên** | Quản lý bàn và QR, quản lý menu, nhận đơn, cập nhật trạng thái, xem thống kê |
-| **Quản trị viên (Admin)** | Duyệt và khóa quán, quản lý người dùng, xem thống kê chung, xử lý khiếu nại |
+| **Chủ quán / nhân viên** | Quản lý bàn và QR, quản lý menu, nhận đơn, cập nhật trạng thái, xem thống kê, xử lý khiếu nại của quán |
+| **Quản trị viên (Admin)** | Duyệt và khóa quán, quản lý người dùng, xem thống kê chung |
 
 ## ✨ Chức năng chính
 
@@ -77,7 +77,7 @@ flowchart LR
 - Gửi đơn thẳng đến quầy bếp; gọi thêm món bất cứ lúc nào
 - Thanh toán bằng tiền mặt tại quầy hoặc chuyển khoản/QR
 - Theo dõi trạng thái đơn: *Chờ xác nhận → Đang làm → Hoàn thành*; hủy đơn khi chưa được xác nhận
-- *(Nâng cao)* Đăng ký tài khoản tùy chọn (xác nhận bằng mã 6 số gửi qua email) và sửa hồ sơ cá nhân. Xem lịch sử đơn theo tài khoản, đặt lại món, đánh giá quán và món: *dự kiến*. Hiện danh sách đơn được lưu trên thiết bị đang dùng
+- *(Nâng cao)* Đăng ký tài khoản tùy chọn (xác nhận bằng mã 6 số gửi qua email) và sửa hồ sơ cá nhân. Đơn đặt khi đăng nhập tự lưu vào lịch sử tài khoản. Đơn đặt trước khi đăng nhập có thể chọn “Lưu vào lịch sử” trên đúng trình duyệt còn mã đơn. Hỗ trợ đặt lại món, đánh giá quán và món
 
 ### 🏪 Phân hệ chủ quán
 - Đăng ký quán, quản lý thông tin quán và giờ mở cửa
@@ -88,12 +88,13 @@ flowchart LR
 - Xác nhận thanh toán; **tính tiền theo bàn** (xem các đơn chưa trả của bàn và thu một lần)
 - Thống kê doanh thu theo ngày/tháng và món bán chạy (chỉ tính đơn đã hoàn thành, ngày theo giờ Việt Nam)
 - **Mã giảm giá**: tạo, tắt/bật, xóa mã giảm theo % hoặc số tiền, đơn tối thiểu, thời hạn, số lượt; khách nhập mã ở giỏ hàng
+- **Khiếu nại (FR-55)**: chỉ chủ quán xem, phản hồi và đóng khiếu nại về các quán của mình; quản trị viên không có API xử lý khiếu nại
 - **Xem đánh giá** của khách (điểm trung bình, phân bố sao, nhận xét, điểm từng món); khách đánh giá đơn đã hoàn thành một lần
 
 ### 🛡️ Phân hệ quản trị viên
 - Duyệt hoặc khóa tài khoản quán
 - Quản lý người dùng và danh mục món
-- Thống kê toàn hệ thống, xử lý khiếu nại
+- Thống kê toàn hệ thống
 
 ### 🚀 Điểm nổi bật
 - **Gọi món bằng QR tại bàn:** khách quét là gọi, không cần app, không cần đăng ký
@@ -145,7 +146,7 @@ CNPM-TULO/
 │   ├── index.html               # Trang chủ
 │   ├── customer/                # Giao diện khách: menu, giỏ hàng, đơn hàng, tài khoản, hồ sơ
 │   ├── merchant/                # Giao diện chủ quán: thông tin quán, menu, bàn và QR, đơn hàng, doanh thu
-│   ├── admin/                   # Giao diện quản trị: quán, người dùng, danh mục, thống kê và khiếu nại
+│   ├── admin/                   # Giao diện quản trị: quán, người dùng, danh mục, thống kê
 │   ├── css/, js/                # Giao diện dùng chung và hàm gọi API (js/app.js)
 │   └── tests/                   # Kiểm thử tự động (unittest)
 ├── docs/                        # Tài liệu dự án (SRS, Use Case, thiết kế...)
@@ -303,7 +304,7 @@ refactor: tách hàm tính giá
 | 1–3 | ✅ **Sprint 0** | Chuẩn bị, phân tích và thiết kế (SRS, Use Case, ERD, wireframe...) |
 | 4–5 | ✅ **Sprint 1** | Nền tảng, menu và QR bàn: đăng ký/đăng nhập, phân quyền, quản lý quán, menu, bàn và mã QR, quét QR xem menu |
 | 6–7 | ✅ **Sprint 2** | Gọi món và xử lý đơn: giỏ hàng, gửi đơn, thanh toán, thông báo đơn mới, cập nhật trạng thái |
-| 8 | 🔄 **Sprint 3** | Tính năng nâng cao: thống kê (đã làm sẵn phần doanh thu), mã giảm giá, đánh giá, lịch sử đơn, hoàn thiện trang Admin. Đã xong nhóm chủ quán: mã giảm giá (FR-46, FR-23), tính tiền theo bàn (FR-45), đánh giá (FR-24, FR-49). Đã xong nhóm khách: lịch sử đơn (FR-21), đặt lại món (FR-22), gợi ý món (FR-25), khiếu nại (FR-26); đã triển khai nhóm Admin (FR-51–55): khóa/mở khóa quán, quản lý người dùng, quản lý danh mục, thống kê toàn hệ thống và xử lý khiếu nại |
+| 8 | 🔄 **Sprint 3** | Tính năng nâng cao: thống kê (đã làm sẵn phần doanh thu), mã giảm giá, đánh giá, lịch sử đơn, hoàn thiện trang Admin. Đã xong nhóm chủ quán: mã giảm giá (FR-46, FR-23), tính tiền theo bàn (FR-45), đánh giá (FR-24, FR-49). Đã xong nhóm khách: lịch sử đơn (FR-21), đặt lại món (FR-22), gợi ý món (FR-25), khiếu nại (FR-26); đã triển khai Admin (FR-51, FR-52, FR-54) và danh mục: khóa/mở khóa quán, quản lý người dùng, quản lý danh mục, thống kê toàn hệ thống; FR-55 do chủ quán xử lý khiếu nại thuộc quán mình |
 | 9 | **Sprint 4** | Kiểm thử tổng thể, đo hiệu năng, sửa lỗi |
 | 10 | Hoàn thiện | Deploy, tài liệu hướng dẫn, báo cáo, slide, demo |
 
@@ -322,3 +323,11 @@ refactor: tách hàm tính giá
 ---
 
 <p align="center">Đồ án môn Công nghệ phần mềm – Đại học CMC – Hà Nội, 2026</p>
+
+### Kiểm tra lịch sử và khiếu nại theo chủ quán
+
+- Khách đăng nhập trước khi đặt: đơn xuất hiện trong **Người dùng → Lịch sử**, kể cả khi đăng nhập ở trình duyệt khác.
+- Khách đặt trước khi đăng nhập: mở **Lịch sử** trên trình duyệt đã đặt, kiểm tra đơn ở phần “Đơn trên thiết bị chưa lưu vào tài khoản” rồi chọn **Lưu vào lịch sử**. Server kiểm tra mã riêng và chỉ nhận đơn chưa thuộc tài khoản khác; không dựa vào tên hoặc số đơn.
+- Chủ quán mở **Chủ quán → Khiếu nại**: xem, lọc trạng thái, phản hồi rồi đóng. Chủ quán khác không đọc hoặc sửa được khiếu nại của quán này. Khách xem phản hồi ở hộp thoại khiếu nại của đơn.
+- Khi nâng cấp, `init_db()` thêm `owner_reply` và sao chép phản hồi cũ từ `admin_reply` một lần. Không xóa đơn, khiếu nại hoặc phản hồi hiện có. Sao lưu CSDL thực tế trước khi triển khai.
+- Chạy `python -m unittest discover -s tests -v` trong `QuickOrder`; kiểm thử dùng CSDL tạm, không gửi email thật.

@@ -23,7 +23,6 @@ const Admin = (() => {
             <a href="shops.html">Quản lý quán</a>
             <a href="users.html">Người dùng</a>
             <a href="categories.html">Danh mục</a>
-            <a href="complaints.html">Khiếu nại</a>
             <button type="button" id="admin-logout">
               Đăng xuất
             </button>

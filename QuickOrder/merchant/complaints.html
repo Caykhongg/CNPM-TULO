@@ -5,7 +5,7 @@
   <meta name="viewport"
         content="width=device-width,initial-scale=1">
 
-  <title>Khiếu nại - QuickOrder Admin</title>
+  <title>Khiếu nại - QuickOrder Chủ quán</title>
 
   <link rel="stylesheet" href="../css/style.css">
 
@@ -36,16 +36,16 @@
   </style>
 
   <script src="../js/app.js"></script>
-  <script src="../js/admin.js"></script>
 </head>
 
 <body>
   <main class="wrap">
     <h1>Xử lý khiếu nại</h1>
     <p class="sub">
-      Xem nội dung, phản hồi cho khách và đóng khiếu nại.
+      Xem khiếu nại về các quán của bạn, phản hồi cho khách và đóng khiếu nại.
     </p>
 
+    <p class="err" id="page-error" role="alert"></p>
     <section id="app" hidden>
       <form class="card" id="filter"
             style="margin-bottom:20px">
@@ -85,7 +85,7 @@
 
         <form id="reply-form">
           <label class="field">
-            <span>Phản hồi của quản trị viên</span>
+            <span>Phản hồi của chủ quán</span>
             <textarea id="reply-text" rows="5"
                       required maxlength="2000"></textarea>
           </label>
@@ -111,6 +111,9 @@
   </main>
 
   <script>
+    QO.header('merchant');
+    const $ = id => document.getElementById(id);
+    const showError = e => { $('page-error').textContent = e.message; };
     const labels = {
       OPEN: 'Đã gửi',
       REPLIED: 'Đã phản hồi',
@@ -122,15 +125,16 @@
     let selected = null;
 
     const load = async () => {
+      $('page-error').textContent = '';
       const params = new URLSearchParams({
-        status: Admin.$('status').value,
+        status: $('status').value,
         limit: 20,
         offset
       });
 
       const data = await QO.api(
         'GET',
-        'admin/complaints?' + params
+        'merchant/complaints?' + params
       );
 
       if (!data.items.length && offset > 0) {
@@ -140,7 +144,7 @@
 
       rows = data.items;
 
-      Admin.$('list').innerHTML = rows.length
+      $('list').innerHTML = rows.length
         ? rows.map(item => `
           <article class="item">
             <div>
@@ -173,13 +177,13 @@
           </div>
         `;
 
-      Admin.$('count').textContent = data.total
+      $('count').textContent = data.total
         ? `${offset + 1}–${offset + rows.length}`
           + ` / ${data.total} khiếu nại`
         : '0 khiếu nại';
 
-      Admin.$('prev').disabled = offset === 0;
-      Admin.$('next').disabled =
+      $('prev').disabled = offset === 0;
+      $('next').disabled =
         offset + 20 >= data.total;
     };
 
@@ -187,41 +191,41 @@
       selected = item;
       const closed = item.status === 'CLOSED';
 
-      Admin.$('detail').hidden = false;
+      $('detail').hidden = false;
 
-      Admin.$('detail-title').textContent =
+      $('detail-title').textContent =
         `Khiếu nại #${item.id} · Đơn #${item.order_id}`;
 
-      Admin.$('detail-meta').textContent =
+      $('detail-meta').textContent =
         `${item.shop_name} · ${item.customer_name}`
         + ` · ${labels[item.status]}`;
 
-      Admin.$('content').textContent = item.content;
-      Admin.$('reply-text').value = item.admin_reply;
+      $('content').textContent = item.content;
+      $('reply-text').value = item.owner_reply;
 
-      Admin.$('reply-text').disabled = closed;
-      Admin.$('reply-button').disabled = closed;
+      $('reply-text').disabled = closed;
+      $('reply-button').disabled = closed;
 
-      Admin.$('close-button').disabled =
+      $('close-button').disabled =
         closed || item.status !== 'REPLIED';
 
-      Admin.$('error').textContent = '';
+      $('error').textContent = '';
 
-      Admin.$('detail-state').textContent = closed
+      $('detail-state').textContent = closed
         ? 'Khiếu nại đã đóng, không thể sửa phản hồi.'
         : 'Lưu phản hồi trước khi đóng khiếu nại.';
     };
 
-    Admin.$('filter').onsubmit = async event => {
+    $('filter').onsubmit = async event => {
       event.preventDefault();
       offset = 0;
       selected = null;
-      Admin.$('detail').hidden = true;
+      $('detail').hidden = true;
 
       try {
         await load();
       } catch (err) {
-        Admin.error(err);
+        showError(err);
       }
     };
 
@@ -229,18 +233,18 @@
       ['prev', -20],
       ['next', 20]
     ]) {
-      Admin.$(id).onclick = async () => {
+      $(id).onclick = async () => {
         offset = Math.max(0, offset + step);
 
         try {
           await load();
         } catch (err) {
-          Admin.error(err);
+          showError(err);
         }
       };
     }
 
-    Admin.$('list').onclick = event => {
+    $('list').onclick = event => {
       const button = event.target.closest('[data-id]');
       if (!button) return;
 
@@ -252,43 +256,43 @@
 
       showDetail(item);
 
-      Admin.$('detail').scrollIntoView({
+      $('detail').scrollIntoView({
         behavior: 'smooth'
       });
     };
 
-    Admin.$('reply-form').onsubmit = async event => {
+    $('reply-form').onsubmit = async event => {
       event.preventDefault();
       if (!selected) return;
 
       const current = selected;
-      const reply = Admin.$('reply-text').value.trim();
+      const reply = $('reply-text').value.trim();
 
       if (!reply) {
-        Admin.$('error').textContent =
+        $('error').textContent =
           'Vui lòng nhập phản hồi.';
         return;
       }
 
-      Admin.$('reply-button').disabled = true;
+      $('reply-button').disabled = true;
 
       try {
         const updated = await QO.api(
           'PUT',
-          `admin/complaints/${current.id}/reply`,
-          {admin_reply: reply}
+          `merchant/complaints/${current.id}/reply`,
+          {owner_reply: reply}
         );
 
         await load();
         showDetail({...current, ...updated});
         QO.toast('Đã lưu phản hồi.');
       } catch (err) {
-        Admin.$('error').textContent = err.message;
-        Admin.$('reply-button').disabled = false;
+        $('error').textContent = err.message;
+        $('reply-button').disabled = false;
       }
     };
 
-    Admin.$('close-button').onclick = async () => {
+    $('close-button').onclick = async () => {
       if (!selected) return;
 
       if (!confirm(
@@ -296,12 +300,12 @@
       )) return;
 
       const current = selected;
-      Admin.$('close-button').disabled = true;
+      $('close-button').disabled = true;
 
       try {
         const updated = await QO.api(
           'PUT',
-          `admin/complaints/${current.id}/close`,
+          `merchant/complaints/${current.id}/close`,
           {}
         );
 
@@ -309,14 +313,18 @@
         showDetail({...current, ...updated});
         QO.toast('Đã đóng khiếu nại.');
       } catch (err) {
-        Admin.$('error').textContent = err.message;
+        $('error').textContent = err.message;
 
-        Admin.$('close-button').disabled =
+        $('close-button').disabled =
           selected.status !== 'REPLIED';
       }
     };
 
-    Admin.start(load);
+    (async () => {
+      await QO.requireOwner();
+      $('app').hidden = false;
+      try { await load(); } catch (e) { showError(e); }
+    })();
   </script>
 </body>
 </html>

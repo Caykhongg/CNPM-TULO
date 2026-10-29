@@ -6,6 +6,12 @@
   <div class="chips" id="chips" aria-label="Lọc theo trạng thái" hidden></div>
   <div id="list"><div class="empty"><b>Đang tải...</b></div></div>
   <div id="more" style="margin-top:14px;text-align:center" hidden><button class="btn ghost" type="button" id="moreBtn">Xem thêm đơn cũ hơn</button></div>
+  <section id="device" style="margin-top:28px" hidden>
+    <h2>Đơn trên thiết bị chưa lưu vào tài khoản</h2>
+    <p class="meta">Kiểm tra đúng đơn của bạn rồi chọn “Lưu vào lịch sử”. Sau khi lưu, bạn xem được đơn khi đăng nhập trên thiết bị khác.</p>
+    <div id="device-error" class="err" role="alert"></div>
+    <div id="device-list" class="list"></div>
+  </section>
 </div>
 <script>
 QO.header('customer');
@@ -25,7 +31,7 @@ QO.header('customer');
   }
   chipsEl.hidden = false;
 
-  const card = o => {
+  const card = (o, device = false) => {
     const [label, tone] = QO.ORDER_STATUS[o.status] || ['Không rõ', ''];
     const items = o.items.map(i => `<li>${i.quantity} × ${QO.esc(i.dish_name)}${i.note ? ` <span class="meta">(${QO.esc(i.note)})</span>` : ''}</li>`).join('');
     const pay = `${QO.PAY_METHOD[o.payment_method] || ''} · ${o.payment_status === 'PAID' ? 'Đã thanh toán' : 'Chưa thanh toán'}`;
@@ -43,7 +49,9 @@ QO.header('customer');
       <div class="row" style="margin-top:8px"><span class="meta">${pay}</span><span class="price">${QO.money(o.total_amount)}</span></div>
       ${o.discount_amount ? `<div class="meta" style="margin-top:4px">Đã giảm ${QO.money(o.discount_amount)} (mã ${QO.esc(o.coupon_code)})</div>` : ''}
       ${reason}
-      <div class="row" style="margin-top:10px;justify-content:flex-start;gap:8px;flex-wrap:wrap"><button class="btn sm" data-again="${o.id}">Đặt lại món</button>${complain}</div>
+      <div class="row" style="margin-top:10px;justify-content:flex-start;gap:8px;flex-wrap:wrap">${device
+        ? `<button class="btn sm" data-save="${o.id}">Lưu vào lịch sử</button>`
+        : `<button class="btn sm" data-again="${o.id}">Đặt lại món</button>${complain}`}</div>
     </article>`;
   };
 
@@ -51,9 +59,9 @@ QO.header('customer');
     chipsEl.innerHTML = FILTERS.map(([v, t]) => `<button type="button" class="chip${filter === v ? ' on' : ''}" data-f="${v}">${t}</button>`).join('');
     const rows = orders.filter(o => !filter || bucket(o.status) === filter);
     if (!orders.length) {
-      listEl.innerHTML = '<div class="empty"><b>Chưa có đơn nào</b>Các đơn bạn gọi khi đã đăng nhập sẽ hiện ở đây.</div>';
+      listEl.innerHTML = '<div class="empty"><b>Chưa có đơn nào trong tài khoản</b>Đơn đặt khi đăng nhập sẽ hiện ở đây. Nếu đã đặt trước khi đăng nhập, bạn có thể lưu đơn từ phần bên dưới trên đúng trình duyệt đã đặt.</div>';
     } else {
-      listEl.innerHTML = rows.length ? '<div class="list">' + rows.map(card).join('') + '</div>'
+      listEl.innerHTML = rows.length ? '<div class="list">' + rows.map(o => card(o)).join('') + '</div>'
         : '<div class="empty"><b>Không có đơn ở mục này</b>' + (nextBefore ? 'Bấm "Xem thêm" để tìm trong các đơn cũ hơn.' : '') + '</div>';
     }
     moreEl.hidden = !nextBefore;
@@ -67,8 +75,40 @@ QO.header('customer');
       nextBefore = r.next_before;
     } catch (e) {
       listEl.innerHTML = `<div class="err">${QO.esc(e.message)}</div>`;
+      return; // giữ thông báo lỗi, không vẽ đè bằng danh sách rỗng
+    } finally {
+      moreBtn.disabled = false;
     }
-    moreBtn.disabled = false; draw();
+    draw();
+  };
+
+  // Chỉ đọc các mã đơn đang có trên thiết bị. Khách chủ động chọn từng đơn để lưu.
+  const loadDevice = async () => {
+    const section = document.getElementById('device'), target = document.getElementById('device-list');
+    const saved = QO.getOrders().filter(o => o.token).slice(0, 30);
+    let failed = false;
+    const rows = await Promise.all(saved.map(async s => {
+      try {
+        const o = await QO.api('GET', `orders/${Number(s.id)}?token=${encodeURIComponent(s.token)}`);
+        return o.can_save_to_history ? o : null;
+      } catch (e) { if (e.name !== 'NotFound') failed = true; return null; }
+    }));
+    const available = rows.filter(Boolean);
+    section.hidden = !available.length && !failed;
+    document.getElementById('device-error').textContent = failed ? 'Chưa tải được một số đơn trên thiết bị. Hãy tải lại trang để thử lại.' : '';
+    target.innerHTML = available.map(o => card(o, true)).join('');
+  };
+  document.getElementById('device-list').onclick = async e => {
+    const b = e.target.closest('[data-save]');
+    if (!b) return;
+    const saved = QO.getOrders().find(o => Number(o.id) === Number(b.dataset.save));
+    if (!saved || !confirm(`Lưu đơn #${b.dataset.save} vào tài khoản đang đăng nhập?`)) return;
+    b.disabled = true;
+    try {
+      await QO.api('POST', `my/orders/${Number(saved.id)}/claim`, {token: saved.token});
+      QO.toast('Đã lưu đơn vào lịch sử tài khoản');
+      await load(); await loadDevice();
+    } catch (err) { document.getElementById('device-error').textContent = err.message; b.disabled = false; }
   };
 
   chipsEl.onclick = e => { const b = e.target.closest('[data-f]'); if (b) { filter = b.dataset.f; draw(); } };
@@ -116,7 +156,8 @@ QO.header('customer');
     if (cb) QO.complaintDialog({orderId: Number(cb.dataset.complain), onSent: () => load()});
   };
 
-  await load();
+  await Promise.all([load(), loadDevice()]);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) load(); });
 })();
 </script>
 </body></html>

@@ -235,12 +235,12 @@ class CustomerUtilityTests(unittest.TestCase):
         self.set_status(o["id"], "COMPLETED")
         r = self.complain(a, o["id"])
         self.assertEqual(r.status_code, 201)
-        self.assertEqual((r.get_json()["status"], r.get_json()["admin_reply"]), ("OPEN", ""))
+        self.assertEqual((r.get_json()["status"], r.get_json()["owner_reply"]), ("OPEN", ""))
         self.assertEqual(a.get(f"/api/my/orders/{o['id']}").get_json()["complaint_status"], "OPEN")
-        with self.qo.db() as c:                                                         # Admin phản hồi ở FR-55
-            c.execute("UPDATE complaints SET status = 'REPLIED', admin_reply = 'Xin lỗi bạn' WHERE order_id = ?", (o["id"],))
+        with self.qo.db() as c:                                                         # Chủ quán phản hồi ở FR-55
+            c.execute("UPDATE complaints SET status = 'REPLIED', owner_reply = 'Xin lỗi bạn' WHERE order_id = ?", (o["id"],))
         lst = a.get(f"/api/orders/{o['id']}/complaints").get_json()
-        self.assertEqual((lst[0]["status"], lst[0]["admin_reply"]), ("REPLIED", "Xin lỗi bạn"))
+        self.assertEqual((lst[0]["status"], lst[0]["owner_reply"]), ("REPLIED", "Xin lỗi bạn"))
         mine = a.get("/api/my/complaints").get_json()
         self.assertEqual((len(mine), mine[0]["shop_name"]), (1, "Quán 1"))
 

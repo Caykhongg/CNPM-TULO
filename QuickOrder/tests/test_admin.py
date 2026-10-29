@@ -62,20 +62,10 @@ class AdminTests(unittest.TestCase):
             self.clients[role] = client
         self.admin = self.clients["admin"]
 
-    def complaint(self):
-        r = self.guest.post(f"/api/orders/{self.order}/complaints", json={
-            "token": "test-token", "content": "Nhờ quản trị viên kiểm tra đơn giúp tôi."
-        })
-        self.assertEqual(r.status_code, 201, r.get_json())
-        return r.get_json()["id"]
-
     def test_permissions(self):
         paths = [("GET", "/api/admin/users", None),
                  ("GET", "/api/admin/statistics", None),
-                 ("GET", "/api/admin/complaints", None),
-                 ("PUT", f"/api/admin/users/{self.ids['customer']}/status", {"is_active": False}),
-                 ("PUT", "/api/admin/complaints/1/reply", {"admin_reply": "Đã nhận"}),
-                 ("PUT", "/api/admin/complaints/1/close", {})]
+                 ("PUT", f"/api/admin/users/{self.ids['customer']}/status", {"is_active": False})]
         for client, code in [(self.guest, 401), (self.clients["owner"], 403), (self.clients["customer"], 403)]:
             for method, path, body in paths:
                 with self.subTest(path=path, code=code):
@@ -146,27 +136,6 @@ class AdminTests(unittest.TestCase):
             ])
         self.assertEqual(self.admin.get("/api/admin/statistics").get_json(),
                          {"shops": 2, "users": 3, "orders": 4, "revenue": 50000})
-
-    def test_fr55_reply_close_customer_reads(self):
-        cid = self.complaint()
-        base = f"/api/admin/complaints/{cid}"
-        self.assertEqual(self.admin.get("/api/admin/complaints?status=OPEN").get_json()["total"], 1)
-        r = self.admin.put(base + "/reply", json={"admin_reply": "Đã liên hệ quán."})
-        self.assertEqual(r.status_code, 200)
-        self.assertEqual(r.get_json()["status"], "REPLIED")
-        rows = self.guest.get(f"/api/orders/{self.order}/complaints?token=test-token").get_json()
-        self.assertEqual(rows[0]["admin_reply"], "Đã liên hệ quán.")
-        self.assertEqual(self.admin.put(base + "/close", json={}).get_json()["status"], "CLOSED")
-        self.assertEqual(self.admin.get("/api/admin/complaints?status=CLOSED").get_json()["total"], 1)
-        self.assertEqual(self.admin.put(base + "/reply", json={"admin_reply": "Sửa"}).status_code, 409)
-
-    def test_fr55_requires_reply_and_correct_token(self):
-        cid = self.complaint()
-        base = f"/api/admin/complaints/{cid}"
-        self.assertEqual(self.admin.put(base + "/close", json={}).status_code, 409)
-        self.assertEqual(self.admin.put(base + "/reply", json={"admin_reply": " "}).status_code, 400)
-        self.assertEqual(self.guest.get(f"/api/orders/{self.order}/complaints?token=wrong").status_code, 404)
-
 
 if __name__ == "__main__":
     unittest.main()
