@@ -349,8 +349,9 @@ def update_me():
 
 
 # ---------- Tài khoản khách: đăng ký có xác nhận email ----------
-def start_code(c, email, base, now):
-    """Tạo mã 6 số mới cho email, lưu hash vào pending_signups. Trả về (mã, None) hoặc (None, lỗi).
+def plan_code(c, email, base, now):
+    """Chuẩn bị mã 6 số mới cho email. Trả về ((dòng sẽ lưu, mã), None) hoặc (None, lỗi).
+    Chưa ghi CSDL: chỉ ghi sau khi email đã gửi thành công, nên gửi lỗi không bị tính vào thời gian chờ hay số lần gửi.
     base: họ tên, số điện thoại, hash mật khẩu. Kiểm tra thời gian chờ và số lần gửi trong 1 giờ."""
     old = c.execute("SELECT * FROM pending_signups WHERE email = ?", (email,)).fetchone()
     if old and now - old["last_sent_at"] < RESEND_WAIT:
@@ -362,13 +363,23 @@ def start_code(c, email, base, now):
     if sent >= MAX_SENDS_PER_HOUR:
         return None, "Đã gửi quá nhiều mã cho email này. Thử lại sau 1 giờ."
     code = f"{secrets.randbelow(10 ** 6):06d}"
+    row = {
+        "email": email, "full_name": base["full_name"], "phone": base["phone"],
+        "password_hash": base["password_hash"], "code_hash": generate_password_hash(code),
+        "expires_at": now + CODE_TTL, "last_sent_at": now,
+        "window_start": window_start, "sent_in_window": sent + 1,
+    }
+    return (row, code), None
+
+
+def store_code(c, row):
+    """Ghi mã đã gửi vào pending_signups và đặt lại số lần nhập sai về 0."""
     c.execute(
         "INSERT OR REPLACE INTO pending_signups (email, full_name, phone, password_hash, code_hash, "
         "expires_at, tries, last_sent_at, window_start, sent_in_window) VALUES (?,?,?,?,?,?,0,?,?,?)",
-        (email, base["full_name"], base["phone"], base["password_hash"], generate_password_hash(code),
-         now + CODE_TTL, now, window_start, sent + 1),
+        (row["email"], row["full_name"], row["phone"], row["password_hash"], row["code_hash"],
+         row["expires_at"], row["last_sent_at"], row["window_start"], row["sent_in_window"]),
     )
-    return code, None
 
 
 def send_code_or_error(email, code):
@@ -378,6 +389,16 @@ def send_code_or_error(email, code):
     except mailer.MailError as e:
         return jsonify(error=str(e)), 502
     return None
+
+
+def finish_send(row, code):
+    """Gửi mã trước; chỉ khi gửi được mới ghi lượt gửi vào CSDL."""
+    failed = send_code_or_error(row["email"], code)
+    if failed:
+        return failed
+    with db() as c:
+        store_code(c, row)
+    return jsonify(message=SENT_MSG)
 
 
 @app.post("/api/customer/signup")
@@ -396,13 +417,10 @@ def customer_signup():
         if c.execute("SELECT 1 FROM users WHERE email = ?", (email,)).fetchone():
             return jsonify(message=SENT_MSG), 200      # không tiết lộ email đã có tài khoản hay chưa
         base = {**fields, "password_hash": generate_password_hash(pw)}
-        code, err = start_code(c, email, base, now)
+        plan, err = plan_code(c, email, base, now)
         if err:
             return jsonify(error=err), 429
-    failed = send_code_or_error(email, code)
-    if failed:
-        return failed
-    return jsonify(message=SENT_MSG)
+    return finish_send(*plan)
 
 
 @app.post("/api/customer/resend")
@@ -414,13 +432,10 @@ def customer_resend():
         if not p:
             return jsonify(message=SENT_MSG), 200
         base = {"full_name": p["full_name"], "phone": p["phone"], "password_hash": p["password_hash"]}
-        code, err = start_code(c, email, base, now)
+        plan, err = plan_code(c, email, base, now)
         if err:
             return jsonify(error=err), 429
-    failed = send_code_or_error(email, code)
-    if failed:
-        return failed
-    return jsonify(message=SENT_MSG)
+    return finish_send(*plan)
 
 
 @app.post("/api/customer/verify")
