@@ -176,6 +176,17 @@ class CustomerSignupTests(unittest.TestCase):
         self.assertEqual(resp.status_code, 502)
         self.assertEqual(resp.get_json()["error"], "Không gửi được email.")
 
+    def test_failed_send_does_not_block_retry(self):
+        # Gửi thư lỗi thì không được tính vào thời gian chờ 60 giây hay số lần gửi trong giờ.
+        with mock.patch.object(self.qo.mailer, "send_code",
+                               side_effect=self.qo.mailer.MailError("Không gửi được email.")):
+            self.assertEqual(self.signup().status_code, 502)
+        self.assertIsNone(self.db_row("SELECT email FROM pending_signups WHERE email = ?", EMAIL))
+        resp = self.signup()                       # thử lại ngay, không phải đợi
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(EMAIL, self.sent)
+        self.assertEqual(self.db_row("SELECT sent_in_window FROM pending_signups WHERE email = ?", EMAIL)[0], 1)
+
     def test_invalid_input_is_rejected(self):
         self.assertEqual(self.signup(password="ngan").status_code, 400)            # dưới 8 ký tự
         self.assertEqual(self.signup(email="khong-phai-email").status_code, 400)
