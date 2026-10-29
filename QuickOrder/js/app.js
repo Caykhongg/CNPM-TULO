@@ -50,7 +50,8 @@ const QO = (() => {
 
   // Phiên đăng nhập nằm trên server (cookie HttpOnly). Trình duyệt không lưu và không tự quyết quyền truy cập.
   const session = async () => { try { return await api('GET', 'me'); } catch { return null; } };
-  const logout = async () => { try { await api('POST', 'logout'); } catch {} location.href = homeUrl(); };
+  // Đăng xuất: xóa luôn hồ sơ tạm trên máy này để người dùng sau không thấy và không dùng được thông tin cũ
+  const logout = async () => { try { await api('POST', 'logout'); } catch {} sessionStorage.removeItem('qo_guest'); sessionStorage.removeItem('qo_guest_on'); location.href = homeUrl(); };
   const requireOwner = async () => { const u = await session();
     if (!u || u.role !== 'owner') { location.replace('login.html'); throw 0; } return u; };
   const myShop = async () => { const u = await session();
