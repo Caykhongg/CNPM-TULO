@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+        content="width=device-width,initial-scale=1">
+
+  <title>Thống kê - QuickOrder Admin</title>
+
+  <link rel="stylesheet" href="../css/style.css">
+
+  <style>
+    [hidden] {
+      display: none !important;
+    }
+  </style>
+
+  <script src="../js/app.js"></script>
+  <script src="../js/admin.js"></script>
+</head>
+
+<body>
+  <main class="wrap">
+    <h1>Thống kê toàn hệ thống</h1>
+
+    <p class="sub">
+      Số liệu toàn bộ thời gian, tổng hợp từ tất cả các quán.
+    </p>
+
+    <section id="app" hidden>
+      <div class="stats" id="stats"></div>
+
+      <section class="card">
+        <h2>Cách tính doanh thu</h2>
+
+        <p>
+          Doanh thu là tổng tiền sau giảm giá của các đơn
+          đã hoàn thành. Đơn đang chờ, đang xử lý và đã hủy
+          không được cộng vào doanh thu.
+        </p>
+
+        <p class="meta" id="updated"
+           style="margin:12px 0"></p>
+
+        <button class="btn" id="refresh">
+          Cập nhật số liệu
+        </button>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    const load = async () => {
+      const data = await QO.api(
+        'GET',
+        'admin/statistics'
+      );
+
+      const cards = [
+        ['Tổng số quán', data.shops],
+        ['Tổng người dùng', data.users],
+        ['Tổng đơn hàng', data.orders],
+        ['Tổng doanh thu', QO.money(data.revenue)]
+      ];
+
+      Admin.$('stats').innerHTML = cards.map(
+        ([label, value]) => `
+          <article class="stat">
+            <small>${label}</small>
+            <b>${value}</b>
+          </article>
+        `
+      ).join('');
+
+      Admin.$('updated').textContent =
+        'Cập nhật lúc: ' + new Date().toLocaleString('vi-VN');
+    };
+
+    Admin.$('refresh').onclick = async () => {
+      Admin.$('refresh').disabled = true;
+
+      try {
+        await load();
+        QO.toast('Đã cập nhật số liệu.');
+      } catch (err) {
+        Admin.error(err);
+      } finally {
+        Admin.$('refresh').disabled = false;
+      }
+    };
+
+    Admin.start(load);
+  </script>
+</body>
+</html>

@@ -239,14 +239,26 @@ def guard_write(c, name, rid, data, u):
 
 
 def check_values(name, data):
-    """Giá trị nhập hợp lệ: giá món phải lớn hơn 0 (UC-24, FR-34). Trả về phản hồi lỗi hoặc None."""
+    # Kiểm tra tên danh mục.
+    if name == "categories" and "name" in data:
+        value = data["name"]
+        if not isinstance(value, str) or not 1 <= len(value.strip()) <= 100:
+            return jsonify(
+                error="Tên danh mục phải có từ 1 đến 100 ký tự."
+            ), 400
+
+        data["name"] = value.strip()
+
     if name == "dishes" and "price" in data:
         try:
             ok = int(data["price"]) > 0
         except (TypeError, ValueError):
             ok = False
         if not ok:
-            return jsonify(error="Giá món phải lớn hơn 0."), 400
+            return jsonify(
+                error="Giá món phải lớn hơn 0."
+            ), 400
+
     return None
 
 
@@ -1668,6 +1680,15 @@ def static_files(p):
         abort(404)
     return send_from_directory(BASE, p)
 
+from admin_api import register_admin_routes
+
+register_admin_routes(
+    app,
+    db=db,
+    login_required=login_required,
+    json_body=json_body,
+    out=out,
+)
 
 init_db()
 
