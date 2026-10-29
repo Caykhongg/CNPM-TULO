@@ -14,8 +14,27 @@
   </div>
 </div>
 <script>
-document.body.insertAdjacentHTML('afterbegin', '<header class="topbar"><div class="in"><span class="logo">Quick<b>Order</b> Admin</span><nav class="nav"><button id="out" hidden>Đăng xuất</button></nav></div></header>');
+document.body.insertAdjacentHTML('afterbegin', `
+  <header class="topbar">
+    <div class="in">
+      <a class="logo" href="dashboard.html">
+        Quick<b>Order</b> Admin
+      </a>
 
+      <nav class="nav">
+        <a href="dashboard.html">Thống kê</a>
+        <a href="shops.html" class="on">Quản lý quán</a>
+        <a href="users.html">Người dùng</a>
+        <a href="categories.html">Danh mục</a>
+        <a href="complaints.html">Khiếu nại</a>
+
+        <button id="out" type="button" hidden>
+          Đăng xuất
+        </button>
+      </nav>
+    </div>
+  </header>
+`);
 const FILTERS = [['ALL', 'Tất cả'], ['PENDING', 'Chờ duyệt'], ['APPROVED', 'Đã duyệt'], ['REJECTED', 'Bị từ chối'], ['LOCKED', 'Bị khóa']];
 const $ = id => document.getElementById(id);
 let shops = [], filter = 'ALL';
