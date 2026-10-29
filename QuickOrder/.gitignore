@@ -3,3 +3,8 @@ __pycache__/
 *.pyc
 .venv/
 uploads/
+
+# Local secrets; keep only the empty configuration example in git.
+.env
+.env.*
+!.env.example
