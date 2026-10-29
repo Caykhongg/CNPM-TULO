@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+        content="width=device-width,initial-scale=1">
+
+  <title>Khiếu nại - QuickOrder Admin</title>
+
+  <link rel="stylesheet" href="../css/style.css">
+
+  <style>
+    [hidden] {
+      display: none !important;
+    }
+
+    .complaint-content {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      margin: 12px 0 20px;
+    }
+
+    .pager {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin: 20px 0;
+    }
+
+    #detail {
+      margin-top: 24px;
+      scroll-margin-top: 120px;
+    }
+  </style>
+
+  <script src="../js/app.js"></script>
+  <script src="../js/admin.js"></script>
+</head>
+
+<body>
+  <main class="wrap">
+    <h1>Xử lý khiếu nại</h1>
+    <p class="sub">
+      Xem nội dung, phản hồi cho khách và đóng khiếu nại.
+    </p>
+
+    <section id="app" hidden>
+      <form class="card" id="filter"
+            style="margin-bottom:20px">
+        <label class="field">
+          <span>Trạng thái</span>
+          <select id="status">
+            <option value="">Tất cả</option>
+            <option value="OPEN">Đã gửi</option>
+            <option value="REPLIED">Đã phản hồi</option>
+            <option value="CLOSED">Đã đóng</option>
+          </select>
+        </label>
+
+        <button class="btn">Lọc / tải lại</button>
+      </form>
+
+      <div class="list" id="list"></div>
+
+      <div class="pager">
+        <button class="btn ghost" id="prev">
+          Trang trước
+        </button>
+
+        <span class="meta" id="count"></span>
+
+        <button class="btn ghost" id="next">
+          Trang sau
+        </button>
+      </div>
+
+      <section class="card" id="detail" hidden>
+        <h2 id="detail-title"></h2>
+        <p class="meta" id="detail-meta"></p>
+
+        <h2 style="margin-top:18px">Nội dung khách gửi</h2>
+        <p class="complaint-content" id="content"></p>
+
+        <form id="reply-form">
+          <label class="field">
+            <span>Phản hồi của quản trị viên</span>
+            <textarea id="reply-text" rows="5"
+                      required maxlength="2000"></textarea>
+          </label>
+
+          <p class="err" id="error" role="alert"></p>
+
+          <div class="acts">
+            <button class="btn" id="reply-button">
+              Lưu phản hồi
+            </button>
+
+            <button type="button" class="btn bad"
+                    id="close-button">
+              Đóng khiếu nại
+            </button>
+          </div>
+        </form>
+
+        <p class="meta" id="detail-state"
+           style="margin-top:12px"></p>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    const labels = {
+      OPEN: 'Đã gửi',
+      REPLIED: 'Đã phản hồi',
+      CLOSED: 'Đã đóng'
+    };
+
+    let rows = [];
+    let offset = 0;
+    let selected = null;
+
+    const load = async () => {
+      const params = new URLSearchParams({
+        status: Admin.$('status').value,
+        limit: 20,
+        offset
+      });
+
+      const data = await QO.api(
+        'GET',
+        'admin/complaints?' + params
+      );
+
+      if (!data.items.length && offset > 0) {
+        offset = Math.max(0, offset - 20);
+        return load();
+      }
+
+      rows = data.items;
+
+      Admin.$('list').innerHTML = rows.length
+        ? rows.map(item => `
+          <article class="item">
+            <div>
+              <h3>
+                Khiếu nại #${item.id}
+                · Đơn #${item.order_id}
+              </h3>
+
+              <p class="meta">
+                ${QO.esc(item.shop_name)}
+                · ${QO.esc(item.customer_name)}
+              </p>
+
+              <span class="tag ${
+                item.status === 'OPEN' ? 'wait' : 'ok'
+              }">
+                ${labels[item.status]}
+              </span>
+            </div>
+
+            <button class="btn ghost sm"
+                    data-id="${item.id}">
+              Xem chi tiết
+            </button>
+          </article>
+        `).join('')
+        : `
+          <div class="empty">
+            <b>Không có khiếu nại ở mục này</b>
+          </div>
+        `;
+
+      Admin.$('count').textContent = data.total
+        ? `${offset + 1}–${offset + rows.length}`
+          + ` / ${data.total} khiếu nại`
+        : '0 khiếu nại';
+
+      Admin.$('prev').disabled = offset === 0;
+      Admin.$('next').disabled =
+        offset + 20 >= data.total;
+    };
+
+    const showDetail = item => {
+      selected = item;
+      const closed = item.status === 'CLOSED';
+
+      Admin.$('detail').hidden = false;
+
+      Admin.$('detail-title').textContent =
+        `Khiếu nại #${item.id} · Đơn #${item.order_id}`;
+
+      Admin.$('detail-meta').textContent =
+        `${item.shop_name} · ${item.customer_name}`
+        + ` · ${labels[item.status]}`;
+
+      Admin.$('content').textContent = item.content;
+      Admin.$('reply-text').value = item.admin_reply;
+
+      Admin.$('reply-text').disabled = closed;
+      Admin.$('reply-button').disabled = closed;
+
+      Admin.$('close-button').disabled =
+        closed || item.status !== 'REPLIED';
+
+      Admin.$('error').textContent = '';
+
+      Admin.$('detail-state').textContent = closed
+        ? 'Khiếu nại đã đóng, không thể sửa phản hồi.'
+        : 'Lưu phản hồi trước khi đóng khiếu nại.';
+    };
+
+    Admin.$('filter').onsubmit = async event => {
+      event.preventDefault();
+      offset = 0;
+      selected = null;
+      Admin.$('detail').hidden = true;
+
+      try {
+        await load();
+      } catch (err) {
+        Admin.error(err);
+      }
+    };
+
+    for (const [id, step] of [
+      ['prev', -20],
+      ['next', 20]
+    ]) {
+      Admin.$(id).onclick = async () => {
+        offset = Math.max(0, offset + step);
+
+        try {
+          await load();
+        } catch (err) {
+          Admin.error(err);
+        }
+      };
+    }
+
+    Admin.$('list').onclick = event => {
+      const button = event.target.closest('[data-id]');
+      if (!button) return;
+
+      const item = rows.find(
+        row => row.id === Number(button.dataset.id)
+      );
+
+      if (!item) return;
+
+      showDetail(item);
+
+      Admin.$('detail').scrollIntoView({
+        behavior: 'smooth'
+      });
+    };
+
+    Admin.$('reply-form').onsubmit = async event => {
+      event.preventDefault();
+      if (!selected) return;
+
+      const current = selected;
+      const reply = Admin.$('reply-text').value.trim();
+
+      if (!reply) {
+        Admin.$('error').textContent =
+          'Vui lòng nhập phản hồi.';
+        return;
+      }
+
+      Admin.$('reply-button').disabled = true;
+
+      try {
+        const updated = await QO.api(
+          'PUT',
+          `admin/complaints/${current.id}/reply`,
+          {admin_reply: reply}
+        );
+
+        await load();
+        showDetail({...current, ...updated});
+        QO.toast('Đã lưu phản hồi.');
+      } catch (err) {
+        Admin.$('error').textContent = err.message;
+        Admin.$('reply-button').disabled = false;
+      }
+    };
+
+    Admin.$('close-button').onclick = async () => {
+      if (!selected) return;
+
+      if (!confirm(
+        'Đóng khiếu nại này? Sau khi đóng không thể sửa phản hồi.'
+      )) return;
+
+      const current = selected;
+      Admin.$('close-button').disabled = true;
+
+      try {
+        const updated = await QO.api(
+          'PUT',
+          `admin/complaints/${current.id}/close`,
+          {}
+        );
+
+        await load();
+        showDetail({...current, ...updated});
+        QO.toast('Đã đóng khiếu nại.');
+      } catch (err) {
+        Admin.$('error').textContent = err.message;
+
+        Admin.$('close-button').disabled =
+          selected.status !== 'REPLIED';
+      }
+    };
+
+    Admin.start(load);
+  </script>
+</body>
+</html>

@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+        content="width=device-width,initial-scale=1">
+
+  <title>Danh mục món - QuickOrder Admin</title>
+
+  <link rel="stylesheet" href="../css/style.css">
+
+  <style>
+    [hidden] {
+      display: none !important;
+    }
+  </style>
+
+  <script src="../js/app.js"></script>
+  <script src="../js/admin.js"></script>
+</head>
+
+<body>
+  <main class="wrap">
+    <h1>Quản lý danh mục món</h1>
+    <p class="sub">
+      Danh mục dùng chung cho các quán.
+      Không thể xóa danh mục đang có món sử dụng.
+    </p>
+
+    <section id="app" hidden>
+      <form class="card" id="category-form"
+            style="max-width:560px;margin-bottom:20px">
+
+        <h2 id="form-title">Thêm danh mục</h2>
+
+        <label class="field">
+          <span>Tên danh mục</span>
+          <input id="category-name"
+                 required maxlength="100"
+                 placeholder="Ví dụ: Món chính">
+        </label>
+
+        <p class="err" id="error" role="alert"></p>
+
+        <div class="acts">
+          <button class="btn" id="save">
+            Lưu danh mục
+          </button>
+
+          <button type="button" class="btn ghost"
+                  id="cancel-edit">
+            Hủy sửa
+          </button>
+        </div>
+      </form>
+
+      <div class="list" id="list"></div>
+    </section>
+  </main>
+
+  <script>
+    let categories = [];
+    let editingId = null;
+
+    const resetForm = () => {
+      editingId = null;
+      Admin.$('category-form').reset();
+      Admin.$('form-title').textContent = 'Thêm danh mục';
+      Admin.$('error').textContent = '';
+    };
+
+    const load = async () => {
+      categories = await QO.all('categories');
+
+      Admin.$('list').innerHTML = categories.length
+        ? categories.map(category => `
+          <article class="item">
+            <h3>${QO.esc(category.name)}</h3>
+
+            <div class="acts">
+              <button class="btn ghost sm"
+                      data-edit="${category.id}">
+                Sửa
+              </button>
+
+              <button class="btn bad sm"
+                      data-delete="${category.id}">
+                Xóa
+              </button>
+            </div>
+          </article>
+        `).join('')
+        : `
+          <div class="empty">
+            <b>Chưa có danh mục</b>
+            Thêm danh mục bằng biểu mẫu phía trên.
+          </div>
+        `;
+    };
+
+    Admin.$('cancel-edit').onclick = resetForm;
+
+    Admin.$('category-form').onsubmit = async event => {
+      event.preventDefault();
+
+      const name = Admin.$('category-name').value.trim();
+
+      if (!name) {
+        Admin.$('error').textContent =
+          'Vui lòng nhập tên danh mục.';
+        return;
+      }
+
+      Admin.$('error').textContent = '';
+      Admin.$('save').disabled = true;
+
+      try {
+        const method = editingId ? 'PUT' : 'POST';
+        const url = editingId
+          ? 'categories/' + editingId
+          : 'categories';
+
+        await QO.api(method, url, {name});
+
+        resetForm();
+        await load();
+
+        QO.toast('Đã lưu danh mục.');
+      } catch (err) {
+        Admin.$('error').textContent = err.message;
+      } finally {
+        Admin.$('save').disabled = false;
+      }
+    };
+
+    Admin.$('list').onclick = async event => {
+      const button = event.target.closest(
+        '[data-edit], [data-delete]'
+      );
+
+      if (!button) return;
+
+      if (button.dataset.edit) {
+        const category = categories.find(
+          item => item.id === Number(button.dataset.edit)
+        );
+
+        if (!category) return;
+
+        editingId = category.id;
+
+        Admin.$('category-name').value = category.name;
+        Admin.$('form-title').textContent = 'Sửa danh mục';
+        Admin.$('error').textContent = '';
+        Admin.$('category-name').focus();
+
+        return;
+      }
+
+      if (!confirm('Xóa danh mục này?')) return;
+
+      button.disabled = true;
+
+      try {
+        const id = Number(button.dataset.delete);
+
+        await QO.api('DELETE', 'categories/' + id);
+
+        if (editingId === id) resetForm();
+
+        await load();
+        QO.toast('Đã xóa danh mục.');
+      } catch (err) {
+        Admin.error(err);
+      } finally {
+        button.disabled = false;
+      }
+    };
+
+    Admin.start(load);
+  </script>
+</body>
+</html>

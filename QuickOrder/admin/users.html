@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+        content="width=device-width,initial-scale=1">
+
+  <title>Quản lý người dùng - QuickOrder</title>
+
+  <link rel="stylesheet" href="../css/style.css">
+
+  <style>
+    [hidden] {
+      display: none !important;
+    }
+
+    .user-tools {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: end;
+      margin-bottom: 20px;
+    }
+
+    .user-tools .field {
+      flex: 1;
+      min-width: 160px;
+      margin: 0;
+    }
+
+    .user-pager {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 20px;
+    }
+
+    .user-info {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+  </style>
+
+  <script src="../js/app.js"></script>
+  <script src="../js/admin.js"></script>
+</head>
+
+<body>
+  <main class="wrap">
+    <h1>Quản lý người dùng</h1>
+    <p class="sub">
+      Tìm kiếm, lọc và khóa/mở khóa tài khoản.
+    </p>
+
+    <section id="app" hidden>
+      <form id="search" class="user-tools">
+        <label class="field">
+          <span>Tên, email hoặc số điện thoại</span>
+          <input id="q" maxlength="100"
+                 placeholder="Nhập từ khóa">
+        </label>
+
+        <label class="field">
+          <span>Vai trò</span>
+          <select id="role">
+            <option value="">Tất cả</option>
+            <option value="customer">Khách hàng</option>
+            <option value="owner">Chủ quán</option>
+            <option value="admin">Quản trị viên</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Trạng thái</span>
+          <select id="active">
+            <option value="">Tất cả</option>
+            <option value="1">Hoạt động</option>
+            <option value="0">Bị khóa</option>
+          </select>
+        </label>
+
+        <button class="btn">Tìm kiếm</button>
+      </form>
+
+      <div class="list" id="list"></div>
+
+      <div class="user-pager">
+        <button class="btn ghost" id="prev">
+          Trang trước
+        </button>
+
+        <span class="meta" id="count"></span>
+
+        <button class="btn ghost" id="next">
+          Trang sau
+        </button>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    let offset = 0;
+    let rows = [];
+    let currentAdmin = null;
+
+    const load = async () => {
+      const params = new URLSearchParams({
+        q: Admin.$('q').value.trim(),
+        role: Admin.$('role').value,
+        is_active: Admin.$('active').value,
+        limit: 20,
+        offset
+      });
+
+      const data = await QO.api(
+        'GET',
+        'admin/users?' + params
+      );
+
+      if (!data.items.length && offset > 0) {
+        offset = Math.max(0, offset - 20);
+        return load();
+      }
+
+      rows = data.items;
+
+      Admin.$('list').innerHTML = rows.length
+        ? rows.map(user => `
+          <article class="item">
+            <div class="user-info">
+              <h3>
+                ${QO.esc(user.full_name || '(Chưa đặt tên)')}
+              </h3>
+
+              <p class="meta">
+                ${QO.esc(user.email)}
+              </p>
+
+              <p class="meta">
+                ${QO.esc(user.phone || 'Chưa có SĐT')}
+                · ${Admin.roles[user.role]}
+              </p>
+
+              <span class="tag ${user.is_active ? 'ok' : 'no'}">
+                ${user.is_active ? 'Hoạt động' : 'Bị khóa'}
+              </span>
+            </div>
+
+            <div class="acts">
+              ${user.id === currentAdmin.id
+                ? '<span class="meta">Tài khoản đang dùng</span>'
+                : `
+                  <button
+                    class="btn ${user.is_active ? 'bad' : ''} sm"
+                    data-id="${user.id}">
+                    ${user.is_active ? 'Khóa' : 'Mở khóa'}
+                  </button>
+                `
+              }
+            </div>
+          </article>
+        `).join('')
+        : `
+          <div class="empty">
+            <b>Không tìm thấy người dùng</b>
+            Thử thay đổi từ khóa hoặc bộ lọc.
+          </div>
+        `;
+
+      Admin.$('count').textContent = data.total
+        ? `${offset + 1}–${offset + rows.length}`
+          + ` / ${data.total} người dùng`
+        : '0 người dùng';
+
+      Admin.$('prev').disabled = offset === 0;
+      Admin.$('next').disabled =
+        offset + 20 >= data.total;
+    };
+
+    Admin.$('search').onsubmit = async event => {
+      event.preventDefault();
+      offset = 0;
+
+      try {
+        await load();
+      } catch (err) {
+        Admin.error(err);
+      }
+    };
+
+    for (const [id, step] of [
+      ['prev', -20],
+      ['next', 20]
+    ]) {
+      Admin.$(id).onclick = async () => {
+        offset = Math.max(0, offset + step);
+
+        try {
+          await load();
+        } catch (err) {
+          Admin.error(err);
+        }
+      };
+    }
+
+    Admin.$('list').onclick = async event => {
+      const button = event.target.closest('[data-id]');
+      if (!button) return;
+
+      const user = rows.find(
+        item => item.id === Number(button.dataset.id)
+      );
+
+      if (!user) return;
+
+      const action = user.is_active ? 'Khóa' : 'Mở khóa';
+
+      if (!confirm(`${action} tài khoản ${user.email}?`)) {
+        return;
+      }
+
+      button.disabled = true;
+
+      try {
+        await QO.api(
+          'PUT',
+          `admin/users/${user.id}/status`,
+          {is_active: !user.is_active}
+        );
+
+        await load();
+        QO.toast('Đã cập nhật trạng thái tài khoản.');
+      } catch (err) {
+        Admin.error(err);
+      } finally {
+        button.disabled = false;
+      }
+    };
+
+    Admin.start(async user => {
+      currentAdmin = user;
+      await load();
+    });
+  </script>
+</body>
+</html>
