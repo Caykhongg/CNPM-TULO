@@ -30,11 +30,11 @@ class EmptyRequiredGroupTests(unittest.TestCase):
         self.qo = load_app(self.tmp.name)
         self.qo.app.config["TESTING"] = True
         with self.qo.db() as c:
-            cat = c.execute("SELECT id FROM categories WHERE name = 'Đồ ăn'").fetchone()[0]
             add = lambda sql, *a: c.execute(sql, a).lastrowid
             owner = add("INSERT INTO users(full_name, email, password_hash, role) VALUES ('A', 'a@quan.vn', 'x', 'owner')")
             self.shop = add("INSERT INTO shops(owner_id, name, address, phone, open_time, close_time, status) VALUES (?, 'Quán A', 'Đ1', '0900000000', '00:00', '24:00', 'APPROVED')", owner)
             self.table = add("INSERT INTO shop_tables(shop_id, table_number, qr_token) VALUES (?, '1', 'tok-1')", self.shop)
+            cat = add("INSERT INTO categories(shop_id, name) VALUES (?, 'Đồ ăn')", self.shop)   # danh mục riêng của quán này
             self.dish = add("INSERT INTO dishes(shop_id, category_id, name, price) VALUES (?, ?, 'Trà', 30000)", self.shop, cat)
             self.group = add("INSERT INTO option_groups(dish_id, name, is_required, is_multiple) VALUES (?, 'Mức đá', 1, 0)", self.dish)
 

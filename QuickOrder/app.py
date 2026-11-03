@@ -49,10 +49,13 @@ OWNER_SQL = {
                     "JOIN shops s ON s.id = d.shop_id WHERE r.id = ?",
     "options": "SELECT s.owner_id FROM options r JOIN option_groups g ON g.id = r.group_id "
                "JOIN dishes d ON d.id = g.dish_id JOIN shops s ON s.id = d.shop_id WHERE r.id = ?",
+    "categories": "SELECT s.owner_id FROM categories r JOIN shops s ON s.id = r.shop_id WHERE r.id = ?",
 }
 # Bảng cha và cột khóa ngoại: khi tạo hoặc chuyển bản ghi, cha phải thuộc quán của người gọi
-PARENT = {"tables": ("shops", "shop_id"), "dishes": ("shops", "shop_id"),
+PARENT = {"tables": ("shops", "shop_id"), "dishes": ("shops", "shop_id"), "categories": ("shops", "shop_id"),
           "optionGroups": ("dishes", "dish_id"), "options": ("optionGroups", "group_id")}
+# Bộ danh mục mặc định: mỗi quán có sẵn khi tạo; quán cũ được bổ sung khi nâng cấp CSDL
+DEFAULT_CATEGORIES = ("Cà phê", "Trà", "Trà sữa", "Đồ ăn", "Nước giải khát")
 # Món, nhóm, tùy chọn: khách chỉ thấy khi quán đã duyệt (BR-06)
 ITEMS = ("dishes", "optionGroups", "options")
 # Khóa tạm đăng nhập theo email: 5 lần sai thì chặn 15 phút (lưu trong bộ nhớ, khởi động lại thì mất)
@@ -84,9 +87,58 @@ def db():
         c.close()
 
 
+NEW_CATEGORIES_SQL = """CREATE TABLE categories_new (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    shop_id INTEGER NOT NULL,
+    name TEXT NOT NULL COLLATE NOCASE,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (shop_id) REFERENCES shops(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    UNIQUE (shop_id, name)
+)"""   # giống định nghĩa trong schema.sql, dùng khi nâng cấp CSDL cũ
+
+
+def add_default_categories(c, shop_id, table="categories"):
+    """Thêm bộ danh mục mặc định cho một quán. Mục đã có thì bỏ qua."""
+    for name in DEFAULT_CATEGORIES:
+        c.execute(f"INSERT OR IGNORE INTO {table} (shop_id, name) VALUES (?, ?)", (shop_id, name))
+
+
+def migrate_categories(c):
+    """CSDL cũ có danh mục dùng chung cho mọi quán (tên duy nhất toàn hệ thống).
+    Chuyển sang danh mục riêng cho từng quán: mỗi quán nhận bộ mặc định cộng các danh mục đang dùng,
+    món được trỏ sang danh mục của quán mình. Danh mục không quán nào dùng thì bỏ. Lỗi giữa chừng thì không đổi gì."""
+    if "shop_id" in columns(c, "categories"):
+        return
+    c.execute("PRAGMA foreign_keys = OFF")     # phải tắt trước khi đổi bảng đang được món trỏ tới
+    c.execute("BEGIN")
+    try:
+        c.execute(NEW_CATEGORIES_SQL)
+        for shop in c.execute("SELECT id FROM shops").fetchall():
+            sid = shop["id"]
+            add_default_categories(c, sid, "categories_new")
+            for dish in c.execute("SELECT d.id AS dish_id, cat.name AS name FROM dishes d "
+                                  "JOIN categories cat ON cat.id = d.category_id WHERE d.shop_id = ?", (sid,)).fetchall():
+                c.execute("INSERT OR IGNORE INTO categories_new (shop_id, name) VALUES (?, ?)", (sid, dish["name"]))
+                new_id = c.execute("SELECT id FROM categories_new WHERE shop_id = ? AND name = ?",
+                                   (sid, dish["name"])).fetchone()[0]
+                c.execute("UPDATE dishes SET category_id = ? WHERE id = ?", (new_id, dish["dish_id"]))
+        c.execute("DROP TABLE categories")
+        c.execute("ALTER TABLE categories_new RENAME TO categories")
+        if c.execute("PRAGMA foreign_key_check(dishes)").fetchall():
+            raise RuntimeError("Nâng cấp danh mục thất bại: có món không khớp với danh mục.")
+        c.execute("COMMIT")
+    except BaseException:
+        c.execute("ROLLBACK")
+        raise
+    finally:
+        c.execute("PRAGMA foreign_keys = ON")
+
+
 def init_db():
     with db() as c, open(os.path.join(BASE, "schema.sql"), encoding="utf-8") as f:
         c.executescript(f.read())
+        migrate_categories(c)                  # CSDL cũ: danh mục dùng chung -> riêng cho từng quán
+        c.execute("CREATE INDEX IF NOT EXISTS idx_categories_shop ON categories(shop_id)")
         # CSDL cũ: bảng orders tạo trước khi có mã đơn và lý do hủy thì bổ sung cột (CREATE IF NOT EXISTS không làm việc này)
         have = {r["name"] for r in c.execute("PRAGMA table_info(orders)")}
         for col in ("access_hash", "cancel_reason", "coupon_code"):
@@ -206,10 +258,8 @@ def guard_write(c, name, rid, data, u):
     """Chặn ghi trái quyền. Trả về dữ liệu đã bỏ các cột chủ quán không được tự đặt."""
     if u["role"] == "admin":
         return data
-    if name == "categories":                   # danh mục dùng chung: chủ quán được thêm/xóa, không được sửa
-        if rid is not None:
-            abort(403)
-        return data
+    if name == "categories" and rid is not None:
+        abort(403)                             # danh mục không sửa, chỉ thêm hoặc xóa trong quán của mình
     if name == "shops":
         if rid is None:                        # quán mới luôn thuộc người tạo và chờ admin duyệt
             data.update(owner_id=u["id"], status="PENDING", status_note="")
@@ -228,6 +278,11 @@ def guard_write(c, name, rid, data, u):
         abort(400)
     if fk in data and owner_via(c, parent, data[fk]) != u["id"]:
         abort(403)                             # không được gắn vào quán/món/nhóm của người khác
+    if name == "dishes" and "category_id" in data:
+        shop_id = data.get("shop_id") or c.execute("SELECT shop_id FROM dishes WHERE id = ?", (rid,)).fetchone()[0]
+        if not c.execute("SELECT 1 FROM categories WHERE id = ? AND shop_id = ?",
+                         (data["category_id"], shop_id)).fetchone():
+            abort(400)                         # món chỉ dùng được danh mục của chính quán đó
     return data
 
 
@@ -468,6 +523,10 @@ def list_rows(name):
         clause, a = item_scope(name, current_user())
         where.append(clause)
         args += a
+    elif name == "categories":                 # danh mục chỉ thấy khi thuộc quán được thấy
+        clause, a = shop_scope(current_user())
+        where.append(f"shop_id IN (SELECT id FROM shops WHERE {clause})")
+        args += a
     elif name == "tables" and "qr_token" not in request.args:
         u = login_required("owner", "admin")   # danh sách bàn chỉ cho chủ quán / admin; khách tra theo qr_token
         if u["role"] == "owner":
@@ -481,7 +540,11 @@ def list_rows(name):
             where.append(f"{k} = ?")
             args.append(v)
         sql = f"SELECT * FROM {t}" + (" WHERE " + " AND ".join(where) if where else "") + " ORDER BY id"
-        return jsonify([out(r) for r in c.execute(sql, args)])
+        rows = c.execute(sql, args).fetchall()
+        if name == "categories":               # đang có món dùng hay không (kể cả món đã xóa mềm), để trang menu ẩn nút xóa
+            used = {r[0] for r in c.execute("SELECT DISTINCT category_id FROM dishes")}
+            return jsonify([{**out(r), "in_use": r["id"] in used} for r in rows])
+        return jsonify([out(r) for r in rows])
 
 
 @app.get("/api/<name>/<int:id>")
@@ -497,6 +560,10 @@ def get_row(name, id):
         elif name in ITEMS:
             clause, a = item_scope(name, current_user())
             row = c.execute(f"SELECT * FROM {t} WHERE id = ? AND {clause}", [id, *a]).fetchone()
+        elif name == "categories":
+            clause, a = shop_scope(current_user())
+            row = c.execute(f"SELECT * FROM {t} WHERE id = ? AND shop_id IN (SELECT id FROM shops WHERE {clause})",
+                            [id, *a]).fetchone()
         else:
             if u is not None:
                 assert_owns(c, name, id, u)
@@ -527,6 +594,8 @@ def create_row(name):
             f"INSERT INTO {t} ({','.join(cols)}) VALUES ({','.join('?' * len(cols))})",
             [clean(data[k]) for k in cols],
         )
+        if name == "shops":
+            add_default_categories(c, cur.lastrowid)   # quán mới có sẵn bộ danh mục mặc định
         row = c.execute(f"SELECT * FROM {t} WHERE id=?", (cur.lastrowid,)).fetchone()
     return jsonify(out(row)), 201
 
@@ -568,8 +637,8 @@ def delete_row(name, id):
         if name == "shops":
             if u["role"] != "admin":
                 abort(403)                     # xóa quán chỉ admin
-        elif name != "categories":             # danh mục: chủ quán được xóa, RESTRICT chặn nếu đang dùng
-            assert_owns(c, name, id, u)
+        else:
+            assert_owns(c, name, id, u)        # danh mục chỉ xóa được trong quán của mình; RESTRICT chặn nếu còn món dùng
         c.execute(f"DELETE FROM {t} WHERE id=?", (id,))
     return "", 204
 

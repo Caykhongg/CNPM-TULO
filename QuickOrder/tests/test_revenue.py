@@ -38,14 +38,13 @@ class RevenueTests(unittest.TestCase):
     # ----- dữ liệu mẫu -----
     def seed(self):
         with self.qo.db() as c:
-            cat = c.execute("SELECT id FROM categories WHERE name = 'Đồ ăn'").fetchone()[0]
-
             def add(sql, *args):
                 return c.execute(sql, args).lastrowid
 
             self.owner = add("INSERT INTO users(full_name, email, password_hash, role) VALUES ('Chủ A', 'a@quan.vn', ?, 'owner')", generate_password_hash(PW))
             add("INSERT INTO users(full_name, email, password_hash, role) VALUES ('Chủ B', 'b@quan.vn', ?, 'owner')", generate_password_hash(PW))
             self.shop = add("INSERT INTO shops(owner_id, name, address, phone, open_time, close_time, status) VALUES (?, 'Quán A', 'Đường 1', '0900000000', '00:00', '24:00', 'APPROVED')", self.owner)
+            cat = add("INSERT INTO categories(shop_id, name) VALUES (?, 'Đồ ăn')", self.shop)   # danh mục riêng của quán này
             self.tea = add("INSERT INTO dishes(shop_id, category_id, name, price) VALUES (?, ?, 'Trà sữa', 50000)", self.shop, cat)
             self.pho = add("INSERT INTO dishes(shop_id, category_id, name, price) VALUES (?, ?, 'Phở', 40000)", self.shop, cat)
 

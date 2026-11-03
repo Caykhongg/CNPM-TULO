@@ -57,8 +57,9 @@ for i, n in enumerate(["Nguyễn Văn An", "Trần Thị Bình", "Lê Hoàng Cư
     add_user(n, f"khach{i+1}@quickorder.vn", f"098800000{i+1}", "customer")
 add_user("Khách Bị Khóa", "khoa@quickorder.vn", "0988000099", "customer", 0)
 
-# ------------------------------------------------------------------ categories (5 mục đã có sẵn trong schema.sql)
-cat = {n: i for i, n in conn.execute("SELECT id,name FROM categories")}
+# ------------------------------------------------------------------ categories: mỗi quán có bộ riêng (giống app.py)
+DEFAULT_CATEGORIES = ("Cà phê", "Trà", "Trà sữa", "Đồ ăn", "Nước giải khát")
+cat = {}                                        # (shop_id, tên danh mục) -> id, điền ngay khi tạo quán
 
 # ------------------------------------------------------------------ shops + bàn/QR
 # (key, index chủ quán, tên, địa chỉ, sđt, mở, đóng, trạng thái, ghi chú, số bàn)
@@ -79,6 +80,8 @@ for key, oi, name, addr, phone, o, c, st, note, ntables in SHOPS:
            VALUES (?,?,?,?,?,?,?,?,?)""",
         (owner_ids[oi], name, addr, phone, o, c, st, note, ago(10, 60))).lastrowid
     shop[key] = sid
+    for cname in DEFAULT_CATEGORIES:
+        cat[(sid, cname)] = conn.execute("INSERT INTO categories(shop_id,name) VALUES (?,?)", (sid, cname)).lastrowid
     for n in range(1, ntables + 1):
         conn.execute("INSERT INTO shop_tables(shop_id,table_number,qr_token) VALUES (?,?,?)",
                      (sid, f"Bàn {n}", secrets.token_urlsafe(16)))      # token sinh giống app.py
@@ -122,7 +125,7 @@ MENU = {
 for key, items in MENU.items():
     for c, name, price, avail, groups, deleted in items:
         did = conn.execute("INSERT INTO dishes(shop_id,category_id,name,price,is_available,is_deleted,created_at) VALUES (?,?,?,?,?,?,?)",
-                           (shop[key], cat[c], name, price, avail, deleted, ago(1, 30))).lastrowid
+                           (shop[key], cat[(shop[key], c)], name, price, avail, deleted, ago(1, 30))).lastrowid
         for gname, req, multi, opts in groups:
             gid = conn.execute("INSERT INTO option_groups(dish_id,name,is_required,is_multiple) VALUES (?,?,?,?)",
                                (did, gname, req, multi)).lastrowid

@@ -12,7 +12,7 @@ QO.header('customer');
   if (table) { try { const r = await QO.api('GET', 'qr/' + encodeURIComponent(table)); if (r.shop.id === shop.id) tb = r.table; } catch {} }
   const scanOk = !!tb;
 
-  const [dAll, cats, gAll, oAll] = await Promise.all([QO.by('dishes', 'shop_id', id), QO.all('categories'), QO.all('optionGroups'), QO.all('options')]);
+  const [dAll, cats, gAll, oAll] = await Promise.all([QO.by('dishes', 'shop_id', id), QO.by('categories', 'shop_id', id), QO.all('optionGroups'), QO.all('options')]);
   const dishes = dAll.filter(d => !d.is_deleted);
   const groupsOf = d => gAll.filter(g => g.dish_id === d.id && oAll.some(o => o.group_id === g.id));   // nhóm chưa có tùy chọn thì ẩn
   const optsOf = g => oAll.filter(o => o.group_id === g.id);
