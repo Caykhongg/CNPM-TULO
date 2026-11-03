@@ -43,8 +43,11 @@ CREATE TABLE IF NOT EXISTS shop_tables (
 
 CREATE TABLE IF NOT EXISTS categories (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL UNIQUE COLLATE NOCASE,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    shop_id INTEGER NOT NULL,
+    name TEXT NOT NULL COLLATE NOCASE,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (shop_id) REFERENCES shops(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    UNIQUE (shop_id, name)
 );
 
 CREATE TABLE IF NOT EXISTS dishes (
@@ -86,8 +89,6 @@ CREATE INDEX IF NOT EXISTS idx_dishes_cat ON dishes(category_id);
 CREATE INDEX IF NOT EXISTS idx_groups_dish ON option_groups(dish_id);
 CREATE INDEX IF NOT EXISTS idx_options_group ON options(group_id);
 
-INSERT OR IGNORE INTO categories (name) VALUES
-    ('Cà phê'), ('Trà'), ('Trà sữa'), ('Đồ ăn'), ('Nước giải khát');
 
 
 CREATE TABLE IF NOT EXISTS orders (

@@ -44,8 +44,6 @@ class OrderTests(unittest.TestCase):
     # ----- dữ liệu mẫu -----
     def seed(self):
         with self.qo.db() as c:
-            cat = c.execute("SELECT id FROM categories WHERE name = 'Đồ ăn'").fetchone()[0]
-
             def add(sql, *args):
                 return c.execute(sql, args).lastrowid
 
@@ -57,9 +55,11 @@ class OrderTests(unittest.TestCase):
             self.other_shop = add("INSERT INTO shops(owner_id, name, address, phone, open_time, close_time, status) VALUES (?, 'Quán B', 'Đường 2', '0900000001', '00:00', '24:00', 'APPROVED')", self.owner_b)
             self.table = add("INSERT INTO shop_tables(shop_id, table_number, qr_token) VALUES (?, '1', 'tok-a-1')", self.shop)
             self.other_table = add("INSERT INTO shop_tables(shop_id, table_number, qr_token) VALUES (?, '1', 'tok-b-1')", self.other_shop)
+            cat = add("INSERT INTO categories(shop_id, name) VALUES (?, 'Đồ ăn')", self.shop)   # danh mục riêng của quán này
             self.dish = add("INSERT INTO dishes(shop_id, category_id, name, price) VALUES (?, ?, 'Trà sữa', 50000)", self.shop, cat)
             self.sold_out = add("INSERT INTO dishes(shop_id, category_id, name, price, is_available) VALUES (?, ?, 'Hết món', 30000, 0)", self.shop, cat)
-            self.other_dish = add("INSERT INTO dishes(shop_id, category_id, name, price) VALUES (?, ?, 'Phở', 40000)", self.other_shop, cat)
+            cat_other = add("INSERT INTO categories(shop_id, name) VALUES (?, 'Đồ ăn')", self.other_shop)
+            self.other_dish = add("INSERT INTO dishes(shop_id, category_id, name, price) VALUES (?, ?, 'Phở', 40000)", self.other_shop, cat_other)
 
             # Nhóm bắt buộc, chọn một: Size
             size = add("INSERT INTO option_groups(dish_id, name, is_required, is_multiple) VALUES (?, 'Size', 1, 0)", self.dish)

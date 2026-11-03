@@ -36,11 +36,11 @@ class Sprint2ExtrasTests(unittest.TestCase):
         self.qo = load_app(self.tmp.name)
         self.qo.app.config["TESTING"] = True
         with self.qo.db() as c:
-            cat = c.execute("SELECT id FROM categories WHERE name = 'Đồ ăn'").fetchone()[0]
             add = lambda sql, *a: c.execute(sql, a).lastrowid
             self.owner_a = add("INSERT INTO users(full_name, email, password_hash, role) VALUES ('A', 'a@quan.vn', ?, 'owner')", generate_password_hash(PW))
             self.owner_b = add("INSERT INTO users(full_name, email, password_hash, role) VALUES ('B', 'b@quan.vn', ?, 'owner')", generate_password_hash(PW))
             self.shop = add("INSERT INTO shops(owner_id, name, address, phone, open_time, close_time, status) VALUES (?, 'Quán A', 'Đ1', '0900000000', '00:00', '24:00', 'APPROVED')", self.owner_a)
+            cat = add("INSERT INTO categories(shop_id, name) VALUES (?, 'Đồ ăn')", self.shop)   # danh mục riêng của quán này
             self.dish = add("INSERT INTO dishes(shop_id, category_id, name, price) VALUES (?, ?, 'Phở', 40000)", self.shop, cat)
 
     def login(self, email):
