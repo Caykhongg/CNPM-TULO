@@ -70,7 +70,7 @@
     };
 
     const load = async () => {
-      categories = await QO.all('categories');
+      categories = await QO.all('categories?global=1');
 
       Admin.$('list').innerHTML = categories.length
         ? categories.map(category => `
