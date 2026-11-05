@@ -9,11 +9,6 @@
 
   <link rel="stylesheet" href="../css/style.css">
 
-  <style>
-    [hidden] {
-      display: none !important;
-    }
-  </style>
 
   <script src="../js/app.js"></script>
   <script src="../js/admin.js"></script>
@@ -70,7 +65,7 @@
     };
 
     const load = async () => {
-      categories = await QO.all('categories');
+      categories = await QO.all('categories?global=1');
 
       Admin.$('list').innerHTML = categories.length
         ? categories.map(category => `

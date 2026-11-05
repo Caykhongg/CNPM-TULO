@@ -1,15 +1,15 @@
-<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Lịch sử đơn hàng - QuickOrder</title><link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="../css/style.css"><script src="../js/app.js"></script></head><body>
+<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Lịch sử đơn hàng - QuickOrder</title><link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@500;600&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"><link rel="stylesheet" href="../css/style.css"><script src="../js/app.js"></script></head><body>
 <div class="wrap">
   <h1>Lịch sử đơn hàng</h1>
   <p class="sub" id="sub">Các đơn bạn đã gọi khi đăng nhập, trên mọi thiết bị.</p>
   <div id="note" role="status"></div>
-  <div class="chips" id="chips" aria-label="Lọc theo trạng thái" hidden></div>
-  <div id="list"><div class="empty"><b>Đang tải...</b></div></div>
-  <div id="more" style="margin-top:14px;text-align:center" hidden><button class="btn ghost" type="button" id="moreBtn">Xem thêm đơn cũ hơn</button></div>
-  <section id="device" style="margin-top:28px" hidden>
+  <div class="tabs chips" id="chips" aria-label="Lọc theo trạng thái" hidden></div>
+  <div id="list" class="mt-2"><div class="empty"><b>Đang tải...</b></div></div>
+  <div id="more" class="mt-2" hidden><button class="btn ghost" type="button" id="moreBtn">Xem thêm đơn cũ hơn</button></div>
+  <section id="device" class="card rule mt-3" hidden>
     <h2>Đơn trên thiết bị chưa lưu vào tài khoản</h2>
-    <p class="meta">Kiểm tra đúng đơn của bạn rồi chọn “Lưu vào lịch sử”. Sau khi lưu, bạn xem được đơn khi đăng nhập trên thiết bị khác.</p>
-    <div id="device-error" class="err" role="alert"></div>
+    <p class="meta mb-2">Kiểm tra đúng đơn của bạn rồi chọn “Lưu vào lịch sử”. Sau khi lưu, bạn xem được đơn khi đăng nhập trên thiết bị khác.</p>
+    <div id="device-error" class="err mb-2" role="alert"></div>
     <div id="device-list" class="list"></div>
   </section>
 </div>
@@ -26,7 +26,7 @@ QO.header('customer');
   const me = await QO.session();
   if (!me || me.role !== 'customer') {
     listEl.innerHTML = `<div class="empty"><b>Bạn cần đăng nhập bằng tài khoản khách</b>Lịch sử chỉ có với đơn gọi khi đã đăng nhập. Đơn gọi không đăng nhập xem ở mục <a href="orders.html">Đơn hàng</a>.
-      <div style="margin-top:12px"><a class="btn" href="account.html">Đăng nhập</a> <a class="btn ghost" href="account.html?mode=register">Tạo tài khoản</a></div></div>`;
+      <div class="acts mt-2"><a class="btn" href="account.html">Đăng nhập</a> <a class="btn ghost" href="account.html?mode=register">Tạo tài khoản</a></div></div>`;
     return;
   }
   chipsEl.hidden = false;
@@ -34,22 +34,22 @@ QO.header('customer');
   const card = (o, device = false) => {
     const [label, tone] = QO.ORDER_STATUS[o.status] || ['Không rõ', ''];
     const items = o.items.map(i => `<li>${i.quantity} × ${QO.esc(i.dish_name)}${i.note ? ` <span class="meta">(${QO.esc(i.note)})</span>` : ''}</li>`).join('');
-    const pay = `${QO.PAY_METHOD[o.payment_method] || ''} · ${o.payment_status === 'PAID' ? 'Đã thanh toán' : 'Chưa thanh toán'}`;
+    const pay = `<span>${QO.PAY_METHOD[o.payment_method] || ''}</span><span>${o.payment_status === 'PAID' ? 'Đã thanh toán' : 'Chưa thanh toán'}</span>`;
     const cs = o.complaint_status && QO.COMPLAINT_STATUS[o.complaint_status];
     const complain = o.status !== 'PENDING'
       ? `<button class="btn ghost sm" data-complain="${o.id}">${cs ? 'Xem khiếu nại' : 'Gửi khiếu nại'}</button>${cs ? ` <span class="tag ${cs[1]}">${cs[0]}</span>` : ''}` : '';
-    const reason = o.status === 'CANCELLED' && o.cancel_reason ? `<div class="meta" style="margin-top:6px">Lý do: ${QO.esc(o.cancel_reason)}</div>` : '';
-    return `<article class="item" style="display:block">
+    const reason = o.status === 'CANCELLED' && o.cancel_reason ? `<div class="meta mt-1">Lý do: ${QO.esc(o.cancel_reason)}</div>` : '';
+    return `<article class="item block">
       <div class="row">
-        <div><h3>Đơn #${o.id} · ${QO.esc(o.shop_name || 'Quán')}</h3><div class="meta">${o.table_number ? QO.esc(QO.tableLabel(o.table_number)) + ' · ' : ''}${QO.esc(QO.fmtTime(o.created_at))}</div></div>
+        <div><h3>Đơn #${o.id}</h3><div class="meta">${QO.esc(o.shop_name || 'Quán')}</div><div class="meta">${o.table_number ? QO.esc(QO.tableLabel(o.table_number)) + ', ' : ''}${QO.esc(QO.fmtTime(o.created_at))}</div></div>
         <span class="tag ${tone}">${label}</span>
       </div>
-      <ul style="margin:10px 0 6px;padding-left:18px">${items}</ul>
-      ${o.note ? `<div class="meta">Ghi chú: ${QO.esc(o.note)}</div>` : ''}
-      <div class="row" style="margin-top:8px"><span class="meta">${pay}</span><span class="price">${QO.money(o.total_amount)}</span></div>
-      ${o.discount_amount ? `<div class="meta" style="margin-top:4px">Đã giảm ${QO.money(o.discount_amount)} (mã ${QO.esc(o.coupon_code)})</div>` : ''}
+      <ul class="items">${items}</ul>
+      ${o.note ? `<div class="meta mt-1">Ghi chú: ${QO.esc(o.note)}</div>` : ''}
+      <div class="row mt-1"><span class="meta pair">${pay}</span><span class="price">${QO.money(o.total_amount)}</span></div>
+      ${o.discount_amount ? `<div class="meta mt-1">Đã giảm ${QO.money(o.discount_amount)} (mã ${QO.esc(o.coupon_code)})</div>` : ''}
       ${reason}
-      <div class="row" style="margin-top:10px;justify-content:flex-start;gap:8px;flex-wrap:wrap">${device
+      <div class="acts mt-2">${device
         ? `<button class="btn sm" data-save="${o.id}">Lưu vào lịch sử</button>`
         : `<button class="btn sm" data-again="${o.id}">Đặt lại món</button>${complain}`}</div>
     </article>`;
@@ -119,7 +119,7 @@ QO.header('customer');
     noteEl.innerHTML = '';
     const r = await QO.api('POST', `my/orders/${id}/reorder`, {});
     if (!r.items.length) {
-      noteEl.innerHTML = `<div class="err" style="margin-bottom:12px"><b>Không có món nào đặt lại được.</b><ul style="margin:6px 0 0;padding-left:18px">${r.skipped.map(s => `<li>${QO.esc(s.dish_name)}: ${QO.esc(s.reason)}</li>`).join('')}</ul></div>`;
+      noteEl.innerHTML = `<div class="shell mb-2"><p class="err"><b>Không có món nào đặt lại được.</b></p><ul class="items">${r.skipped.map(s => `<li>${QO.esc(s.dish_name)}: ${QO.esc(s.reason)}</li>`).join('')}</ul></div>`;
       return;
     }
     let c = QO.getCart();
@@ -137,11 +137,11 @@ QO.header('customer');
     const changed = r.items.filter(i => i.price_changed);
     if (!r.skipped.length && !changed.length && r.accepting && c.table) { location.href = 'cart.html'; return; }
     const lines = [];
-    if (changed.length) lines.push(`<li>Giá hiện tại khác lần trước: ${changed.map(i => `${QO.esc(i.name)} (${QO.money(i.old_unit_price)} → ${QO.money(i.unit_price)})`).join(', ')}.</li>`);
+    if (changed.length) lines.push(`<li>Giá hiện tại khác lần trước: ${changed.map(i => `${QO.esc(i.name)} (từ ${QO.money(i.old_unit_price)} lên ${QO.money(i.unit_price)})`).join(', ')}.</li>`);
     if (r.skipped.length) lines.push(...r.skipped.map(s => `<li>Bỏ qua ${QO.esc(s.dish_name)}: ${QO.esc(s.reason)}</li>`));
     if (!r.accepting) lines.push('<li>Quán hiện không nhận đơn (ngoài giờ mở cửa).</li>');
     if (!c.table) lines.push('<li>Hãy quét mã QR trên bàn để gửi đơn.</li>');
-    noteEl.innerHTML = `<div class="card" style="margin-bottom:14px"><b>Đã thêm ${r.items.length} món vào giỏ.</b><ul style="margin:6px 0 10px;padding-left:18px">${lines.join('')}</ul><a class="btn sm" href="cart.html">Đến giỏ hàng</a></div>`;
+    noteEl.innerHTML = `<div class="shell mb-2"><b>Đã thêm ${r.items.length} món vào giỏ.</b><ul class="items">${lines.join('')}</ul><div class="mt-2"><a class="btn sm" href="cart.html">Đến giỏ hàng</a></div></div>`;
     window.scrollTo({top: 0, behavior: 'smooth'});
   };
 

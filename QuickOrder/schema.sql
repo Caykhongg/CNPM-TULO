@@ -41,13 +41,14 @@ CREATE TABLE IF NOT EXISTS shop_tables (
     UNIQUE (shop_id, table_number)
 );
 
+-- shop_id NULL: danh mục chung do admin quản lý. shop_id có giá trị: danh mục riêng của quán.
+-- Chỉ mục duy nhất theo tên được tạo trong app.py (CATEGORY_INDEXES_SQL) vì CSDL cũ cần nâng cấp trước.
 CREATE TABLE IF NOT EXISTS categories (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    shop_id INTEGER NOT NULL,
+    shop_id INTEGER,
     name TEXT NOT NULL COLLATE NOCASE,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (shop_id) REFERENCES shops(id) ON UPDATE CASCADE ON DELETE CASCADE,
-    UNIQUE (shop_id, name)
+    FOREIGN KEY (shop_id) REFERENCES shops(id) ON UPDATE CASCADE ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS dishes (
