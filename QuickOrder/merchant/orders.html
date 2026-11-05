@@ -58,7 +58,7 @@ QO.header('merchant');
     const paid = o.payment_status === 'PAID';
     const pay = o.status === 'CANCELLED' ? '' :
       `<button class="btn ghost sm" data-pay="${paid ? 'UNPAID' : 'PAID'}" data-id="${o.id}">${paid ? 'Hoàn tác thanh toán' : 'Xác nhận đã thanh toán'}</button>`;
-    return `<article class="item" style="display:block;${o.status === 'PENDING' ? 'border-color:var(--acc);' : ''}">
+    return `<article class="item" style="display:block;${o.status === 'PENDING' ? 'border-color:var(--accent);' : ''}">
       <div class="row">
         <div><h3>Đơn #${o.id} · ${QO.esc(table)}</h3><div class="meta">${QO.esc(QO.fmtTime(o.created_at))} · ${QO.esc(o.customer_name)}</div></div>
         <span class="tag ${tone}">${label}</span>

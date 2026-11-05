@@ -1,32 +1,32 @@
-<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Hồ sơ - QuickOrder</title><link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="../css/style.css"><script src="../js/app.js"></script></head><body>
-<div class="wrap" style="max-width:640px">
+<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Hồ sơ - QuickOrder</title><link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@500;600&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"><link rel="stylesheet" href="../css/style.css"><script src="../js/app.js"></script></head><body>
+<div class="wrap mid">
   <h1>Hồ sơ</h1>
   <p class="sub" id="sub">Đang tải...</p>
 
   <section id="choose" class="grid" hidden>
-    <div class="card">
+    <div class="tile">
       <h2>Hồ sơ tạm</h2>
       <p class="meta">Chỉ giữ trong tab này. Đóng tab là mất. Không cần đăng ký.</p>
-      <button class="btn" id="pickGuest" type="button" style="margin-top:12px">Dùng hồ sơ tạm</button>
+      <button class="btn mt-2" id="pickGuest" type="button">Dùng hồ sơ tạm</button>
     </div>
-    <div class="card">
+    <div class="tile">
       <h2>Tài khoản</h2>
       <p class="meta">Lưu hồ sơ lâu dài, đăng nhập được trên mọi thiết bị.</p>
-      <div class="row" style="margin-top:12px;justify-content:flex-start">
+      <div class="acts mt-2">
         <a class="btn" href="account.html?mode=register">Tạo tài khoản</a>
         <a class="btn ghost" href="account.html">Đăng nhập</a>
       </div>
     </div>
   </section>
 
-  <div id="banner" class="shell" hidden style="margin-bottom:16px"></div>
+  <div id="banner" class="shell mb-2" hidden></div>
 
   <form class="card" id="f" hidden>
     <label class="field"><span>Họ tên</span><input name="full_name" autocomplete="name" maxlength="100" required></label>
     <label class="field"><span>Số điện thoại</span><input name="phone" type="tel" autocomplete="tel" required></label>
     <label class="field" id="emailRow" hidden><span>Email (không đổi được)</span><input name="email" type="email" readonly></label>
-    <div class="err" id="er"></div>
-    <div class="row" style="margin-top:4px">
+    <div class="err mb-2" id="er"></div>
+    <div class="acts">
       <button class="btn ghost" type="button" id="back" hidden>Quay lại lựa chọn</button>
       <button class="btn" id="save" type="submit">Lưu thông tin</button>
     </div>

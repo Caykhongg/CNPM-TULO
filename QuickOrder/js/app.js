@@ -83,7 +83,7 @@ const QO = (() => {
       <div id="cpl-list"></div>
       <div id="cpl-new"><label class="field"><span>Nội dung khiếu nại (10 đến 500 ký tự)</span><textarea id="cpl-t" rows="4" maxlength="500" placeholder="VD: Món lên chậm, thiếu món, sai món..."></textarea></label>
         <div class="err" id="cpl-e" role="alert"></div></div>
-      <div class="row" style="margin-top:12px"><button class="btn ghost" value="x">Đóng</button><button class="btn" id="cpl-ok" type="button">Gửi khiếu nại</button></div></form>`;
+      <div class="row"><button class="btn ghost" value="x">Đóng</button><button class="btn" id="cpl-ok" type="button">Gửi khiếu nại</button></div></form>`;
     document.body.appendChild(d);
     d.addEventListener('close', () => d.remove());
     d.showModal();
@@ -92,10 +92,10 @@ const QO = (() => {
     const load = async () => {
       try {
         const rows = await api('GET', `orders/${Number(orderId)}/complaints${q}`);
-        list.innerHTML = rows.length ? '<div class="meta" style="margin:10px 0 6px">Khiếu nại đã gửi</div>' + rows.map(r => {
+        list.innerHTML = rows.length ? '<div class="cpl-head">Khiếu nại đã gửi</div>' + rows.map(r => {
           const [label, tone] = COMPLAINT_STATUS[r.status] || ['', ''];
-          return `<div class="card" style="margin-bottom:8px"><div class="row"><span class="meta">${esc(fmtTime(r.created_at))}</span><span class="tag ${tone}">${label}</span></div>
-            <p style="margin:6px 0 0">${esc(r.content)}</p>${(r.owner_reply || r.admin_reply) ? `<p style="margin:8px 0 0"><b>Phản hồi của quán:</b> ${esc(r.owner_reply || r.admin_reply)}</p>` : ''}</div>`;
+          return `<div class="cpl-item"><div class="row"><span class="meta">${esc(fmtTime(r.created_at))}</span><span class="tag ${tone}">${label}</span></div>
+            <p>${esc(r.content)}</p>${(r.owner_reply || r.admin_reply) ? `<p class="reply"><b>Phản hồi của quán:</b> ${esc(r.owner_reply || r.admin_reply)}</p>` : ''}</div>`;
         }).join('') : '';
         const busy = rows.some(r => r.status !== 'CLOSED');       // đang có khiếu nại chưa đóng thì chưa gửi thêm được
         box.hidden = ok.hidden = busy;
@@ -138,7 +138,7 @@ const QO = (() => {
     const here = location.pathname;
     const sec = /\/merchant\//.test(here) ? 'merchant' : /\/customer\//.test(here) ? 'customer' : 'home';
     document.body.insertAdjacentHTML('afterbegin', `<header class="topbar"><div class="in">
-      <a class="logo" href="${homeUrl()}">Quick<b>Order</b></a>
+      <a class="logo" href="${homeUrl()}">QuickOrder</a>
       <nav class="switch" aria-label="Chọn khu vực">
         <div class="dd">
           <button class="dd-btn${sec === 'customer' ? ' on' : ''}" type="button" aria-expanded="false">Người dùng</button>
