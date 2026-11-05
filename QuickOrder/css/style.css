@@ -20,6 +20,14 @@
   --off-bg: #EFECE6;
   --off-ink: #8F887C;
   --placeholder: #7A7368;
+  --amber: #C9891E;       /* màu phụ: thẻ thống kê, trạng thái chờ */
+  --amber-tint: #FBF1DC;
+  --coral: #C4573F;       /* màu phụ: thẻ thống kê */
+  --coral-tint: #F9E8E2;
+  --sky: #2E6D9E;         /* màu phụ: thẻ thống kê, nhãn danh mục */
+  --sky-tint: #E5EFF7;
+  --plum: #7B4F93;        /* màu phụ: nhãn danh mục */
+  --plum-tint: #F2EBF6;
   --sans: "Work Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --serif: "Crimson Pro", Georgia, "Times New Roman", serif;
   --r: 8px;               /* điều khiển: nút, ô nhập, chip */
@@ -133,7 +141,7 @@ input[type=date] { min-width: 150px; }
 .kv b { font-weight: 600; font-variant-numeric: tabular-nums; }
 
 /* ----- Thanh trên cùng ----- */
-.topbar { position: sticky; top: 0; z-index: 20; background: var(--white); border-bottom: 1px solid var(--line); }
+.topbar { position: sticky; top: 0; z-index: 20; background: var(--white); border-bottom: 1px solid var(--line); box-shadow: inset 0 3px 0 var(--accent); }
 .topbar .in { max-width: 1100px; margin: 0 auto; padding: 12px 20px; display: flex; align-items: center; gap: 28px; min-height: 64px; }
 .topbar a { color: var(--ink); text-decoration: none; }
 .logo { font-family: var(--serif); font-size: 24px; font-weight: 600; letter-spacing: -.01em; white-space: nowrap; }
@@ -204,13 +212,20 @@ input[type=date] { min-width: 150px; }
 .sec { margin-top: 40px; }
 .sec h2 { margin-bottom: 0; padding-top: 22px; border-top: 1px solid var(--line); }
 .sec > .list { margin-top: 0; }
-.tag { display: inline-flex; align-items: center; gap: 7px; font-size: 13.5px; font-weight: 500; color: var(--ink-2); white-space: nowrap; }
+.tag { display: inline-flex; align-items: center; gap: 7px; padding: 3px 10px 3px 9px; border-radius: 999px; background: var(--off-bg); font-size: 13.5px; font-weight: 500; color: var(--ink-2); white-space: nowrap; }
 .tag::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex: none; }
 .tag.ok { color: var(--accent-2); }
 .tag.ok::before { background: var(--accent); }
 .tag.no { color: var(--danger); }
 .tag.no::before { background: var(--danger); }
-.tag.wait::before { background: transparent; border: 1.5px solid var(--muted); }
+.tag.wait { color: #7A5410; background: var(--amber-tint); }
+.tag.wait::before { background: var(--amber); }
+.tag.ok { background: var(--accent-tint); }
+.tag.no { background: var(--danger-tint); }
+.chips.tinted .chip:nth-child(4n+1) { background: var(--accent-tint); border-color: #B9D4C5; }
+.chips.tinted .chip:nth-child(4n+2) { background: var(--amber-tint); border-color: #E6CB94; }
+.chips.tinted .chip:nth-child(4n+3) { background: var(--sky-tint); border-color: #B3CEE2; }
+.chips.tinted .chip:nth-child(4n+4) { background: var(--plum-tint); border-color: #CDB8D8; }
 .shell { padding: 16px 18px; background: var(--panel); border-radius: var(--r); color: var(--ink-2); font-size: 14.5px; }
 .shell b { color: var(--ink); }
 .shell p + p { margin-top: 6px; }
@@ -240,7 +255,11 @@ input[type=date] { min-width: 150px; }
 
 /* ----- Thống kê ----- */
 .stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 0 28px; margin-bottom: 36px; }
-.stat { padding: 16px 0; border-top: 1px solid var(--line); min-width: 0; }
+.stat { padding: 16px 0 14px; border-top: 3px solid var(--c, var(--line)); min-width: 0; }
+.stats > :nth-child(4n+1) { --c: var(--accent); }
+.stats > :nth-child(4n+2) { --c: var(--amber); }
+.stats > :nth-child(4n+3) { --c: var(--sky); }
+.stats > :nth-child(4n+4) { --c: var(--coral); }
 .stat small { display: block; color: var(--muted); font-size: 13.5px; margin-bottom: 6px; }
 .stat b { display: block; font-size: 26px; font-weight: 600; line-height: 1.2; letter-spacing: -.01em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .stat .tag { margin-top: 2px; font-size: 15px; }
@@ -304,7 +323,7 @@ summary:hover { text-decoration: underline; text-underline-offset: 3px; }
 .custom { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0 0; }
 .custom input { width: auto; min-width: 150px; }
 .custom span { color: var(--muted); font-size: 14px; }
-.card.panel { margin-top: 16px; }
+.card.panel { margin-top: 16px; background: var(--sky-tint); }
 .card.panel > h2 { font-size: 18px; margin-bottom: 12px; }
 .user-tools { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-bottom: 20px; }
 .user-tools .field { flex: 1; min-width: 160px; margin: 0; }
