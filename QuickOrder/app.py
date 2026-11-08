@@ -783,9 +783,9 @@ def release_coupon(c, order):
 # ---------- Đơn hàng ----------
 ORDER_STATUSES = ("PENDING", "CONFIRMED", "PREPARING", "COMPLETED", "CANCELLED")
 # Chủ quán chỉ được chuyển tiến theo luồng: chờ xác nhận -> đang làm -> hoàn thành; hủy được cho tới khi hoàn thành.
-# CONFIRMED chỉ còn ở dữ liệu cũ nhưng vẫn được xử lý tiếp.
+# CONFIRMED chỉ còn ở dữ liệu cũ (hiển thị là "Đang làm"): đơn cũ vẫn xử lý tiếp được, nhưng không chuyển đơn mới sang CONFIRMED (SRS v1.1, BR-05).
 NEXT_STATUS = {
-    "PENDING": ("CONFIRMED", "PREPARING", "CANCELLED"),
+    "PENDING": ("PREPARING", "CANCELLED"),
     "CONFIRMED": ("PREPARING", "COMPLETED", "CANCELLED"),
     "PREPARING": ("COMPLETED", "CANCELLED"),
 }

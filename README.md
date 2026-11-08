@@ -236,6 +236,20 @@ Khi chạy thật nên đặt `SECRET_KEY` cố định, nếu không mỗi lầ
 
 > ⚠️ Database và thư mục ảnh tải lên nằm trên ổ đĩa của máy chủ. Nếu nơi triển khai dùng ổ đĩa tạm thời (như gói miễn phí của Render) thì dữ liệu mất khi khởi động lại hoặc triển khai lại; cần gắn ổ đĩa lưu trữ lâu dài và trỏ `QO_DB`, `QO_UPLOADS` vào đó.
 
+### Triển khai thật (Render)
+
+Làm theo thứ tự này khi đưa lên máy chủ thật:
+
+1. **Ổ đĩa lưu trữ:** gắn Persistent Disk (ví dụ mount `/var/data`) rồi đặt `QO_DB=/var/data/database.db` và `QO_UPLOADS=/var/data/uploads`. Không có ổ đĩa thì database và ảnh QR thanh toán mất sau mỗi lần deploy.
+2. **Lệnh chạy (Start Command):** `gunicorn app:app --workers 1`. Chỉ dùng một tiến trình vì bộ đếm đăng nhập sai nằm trong bộ nhớ.
+3. **Tạo database trống kèm admin**, không chạy `seed_data.py` (tài khoản demo có mật khẩu công khai và dữ liệu giả sẽ lẫn vào số liệu thật):
+   ```bash
+   ADMIN_EMAIL=<email-that> ADMIN_PASSWORD=<mat-khau-manh> python init_db.py
+   ```
+4. **Biến môi trường:** `SECRET_KEY` (cố định), `HTTPS=1`, `MAIL_API_KEY`, `MAIL_FROM`, `MAIL_FROM_NAME`. Không đặt `MAIL_CONSOLE` và `FLASK_DEBUG`.
+5. **Sao lưu** `database.db` trước mỗi lần triển khai bản mới.
+6. **Kiểm tra sau khi deploy:** mở `/api/shops` xem có quán mẫu lọt vào không, thử đăng nhập `admin@quickorder.vn` với `Demo@1234` (phải thất bại), rồi đặt thử một đơn từ mã QR, xử lý đơn và khởi động lại dịch vụ để chắc dữ liệu còn nguyên.
+
 ### Chạy kiểm thử
 Chạy trong thư mục `QuickOrder/` (không cần cài thêm thư viện ngoài `requirements.txt`):
 ```bash

@@ -233,6 +233,23 @@ class OrderTests(unittest.TestCase):
         r = self.login("a@quan.vn").put(f"/api/orders/{order['id']}/status", json={"status": "COMPLETED"})
         self.assertEqual(r.status_code, 409)
 
+    def test_new_order_cannot_move_to_legacy_confirmed_status(self):
+        """BR-05: luồng mới chỉ có Chờ xác nhận, Đang làm, Hoàn thành, Đã hủy; CONFIRMED chỉ còn ở dữ liệu cũ."""
+        order = self.make_order()
+        owner = self.login("a@quan.vn")
+        r = owner.put(f"/api/orders/{order['id']}/status", json={"status": "CONFIRMED"})
+        self.assertEqual(r.status_code, 409)
+        self.assertEqual(owner.get(f"/api/orders/{order['id']}").get_json()["status"], "PENDING")
+
+    def test_legacy_confirmed_order_can_still_be_finished(self):
+        """Đơn cũ đang ở CONFIRMED vẫn xử lý tiếp được, không bị kẹt."""
+        order = self.make_order()
+        with self.qo.db() as c:
+            c.execute("UPDATE orders SET status = 'CONFIRMED' WHERE id = ?", (order["id"],))
+        owner = self.login("a@quan.vn")
+        r = owner.put(f"/api/orders/{order['id']}/status", json={"status": "COMPLETED"})
+        self.assertEqual(r.get_json()["status"], "COMPLETED")
+
     def test_owner_cannot_move_order_back_to_pending(self):
         order = self.make_order()
         owner = self.login("a@quan.vn")
