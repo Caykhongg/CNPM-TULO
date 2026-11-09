@@ -1,0 +1,15 @@
+<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>QuickOrder - Chủ quán</title><link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="../css/style.css"><script src="../js/app.js"></script></head><body>
+<div class="wrap"><h1>Duyệt quán</h1><p class="sub">Trang quản trị mẫu (chưa có đăng nhập) để duyệt, từ chối, khóa quán.</p><div class="list" id="ls"></div></div>
+<script>
+document.body.insertAdjacentHTML("afterbegin",'<header class="topbar"><div class="in"><span class="logo">Quick<b>Order</b> Admin</span></div></header>');
+const draw = async () => { const ss = await QO.all('shops');
+  ls.innerHTML = ss.length ? ss.map(s => { const [t, c] = QO.STATUS[s.status];
+    return '<div class="item"><div><h3>' + QO.esc(s.name) + ' <span class="tag ' + c + '">' + t + '</span></h3><div class="meta">' + QO.esc(s.address) + ' · ' + QO.esc(s.phone) + (s.status_note ? ' · ' + QO.esc(s.status_note) : '') + '</div></div><div class="acts">'
+      + (s.status === 'PENDING' ? '<button class="btn sm" data-a="approve" data-id="' + s.id + '">Duyệt</button><button class="btn bad sm" data-a="reject" data-id="' + s.id + '">Từ chối</button>' : '')
+      + (s.status === 'APPROVED' ? '<button class="btn bad sm" data-a="lock" data-id="' + s.id + '">Khóa</button>' : '') + (s.status === 'LOCKED' ? '<button class="btn sm" data-a="unlock" data-id="' + s.id + '">Mở khóa</button>' : '') + '</div></div>'; }).join('') : '<div class="empty"><b>Chưa có quán đăng ký</b></div>'; };
+ls.onclick = async e => { const b = e.target.closest('[data-a]'); if (!b) return; const s = await QO.get('shops', b.dataset.id), a = b.dataset.a;
+  if (a === 'approve' || a === 'unlock') { s.status = 'APPROVED'; s.status_note = ''; }
+  else { const r = prompt('Lý do:'); if (r === null) return; s.status = a === 'reject' ? 'REJECTED' : 'LOCKED'; s.status_note = r; }
+  await QO.put('shops', s); draw(); };
+draw();
+</script></body></html>

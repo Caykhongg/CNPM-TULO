@@ -1,0 +1,35 @@
+<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>QuickOrder - Chủ quán</title><link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="../css/style.css"><script src="../js/app.js"></script></head><body>
+<div class="wrap"><h1>Quản lý menu</h1><p class="sub">Danh mục, món, nhóm tùy chọn (size, topping).</p><div id="root"></div></div>
+<script>
+QO.header('merchant');
+(async () => { await QO.requireOwner(); const shop = await QO.myShop(), root = document.getElementById('root');
+  if (!shop) { root.innerHTML = '<div class="empty"><b>Bạn chưa tạo quán</b><a class="btn" href="shop.html">Tạo quán</a></div>'; return; }
+  root.innerHTML = '<div class="split"><div><form class="card" id="cf" style="margin-bottom:16px"><h2>Danh mục</h2><div class="mini"><input name="name" placeholder="VD: Món chính" required><button class="btn sm">Thêm</button></div><div class="chips" id="cl" style="margin:12px 0 0"></div></form>'
+    + '<form class="card" id="df"><h2 id="dt">Thêm món</h2><input type="hidden" name="id"><label class="field"><span>Tên món</span><input name="name" required></label><div class="two"><label class="field"><span>Giá (VND)</span><input name="price" type="number" min="0" step="500" required></label><label class="field"><span>Danh mục</span><select name="category_id" required></select></label></div><label class="check"><input type="checkbox" name="is_available" checked> Còn món</label><div class="err" id="er"></div><div class="row"><button type="button" class="btn ghost" id="rs">Hủy sửa</button><button class="btn">Lưu món</button></div></form></div><div class="list" id="ls"></div></div>';
+  let cats, dishes, groups, opts;
+  const load = async () => { cats = await QO.all('categories'); dishes = (await QO.by('dishes', 'shop_id', shop.id)).filter(d => !d.is_deleted); const ids = new Set(dishes.map(d => d.id));
+    groups = (await QO.all('optionGroups')).filter(g => ids.has(g.dish_id)); const gi = new Set(groups.map(g => g.id)); opts = (await QO.all('options')).filter(o => gi.has(o.group_id)); draw(); };
+  const draw = () => { cl.innerHTML = cats.length ? cats.map(c => '<span class="chip">' + QO.esc(c.name) + (dishes.some(d => d.category_id === c.id) ? '' : ' <a href="#" data-xc="' + c.id + '" style="color:var(--bad)">×</a>') + '</span>').join('') : '<span class="meta">Chưa có danh mục.</span>';
+    df.category_id.innerHTML = cats.length ? cats.map(c => '<option value="' + c.id + '">' + QO.esc(c.name) + '</option>').join('') : '<option value="">Hãy thêm danh mục</option>';
+    ls.innerHTML = dishes.length ? dishes.map(d => { const c = cats.find(x => x.id === d.category_id), gs = groups.filter(g => g.dish_id === d.id);
+      return '<div class="card"><div class="row"><div><h3>' + QO.esc(d.name) + '</h3><div class="meta">' + (c ? QO.esc(c.name) : '—') + ' · <span class="price">' + QO.money(d.price) + '</span> <span class="tag ' + (d.is_available ? 'ok' : 'no') + '">' + (d.is_available ? 'Còn món' : 'Hết món') + '</span></div></div><div class="acts"><button class="btn ghost sm" data-ed="' + d.id + '">Sửa</button><button class="btn warn sm" data-av="' + d.id + '">' + (d.is_available ? 'Báo hết' : 'Báo còn') + '</button><button class="btn bad sm" data-rm="' + d.id + '">Xóa</button></div></div>'
+        + '<div class="opts">' + gs.map(g => '<div class="g"><b>' + QO.esc(g.name) + '</b> <span class="meta">(' + (g.is_required ? 'bắt buộc' : 'tùy chọn') + ', ' + (g.is_multiple ? 'chọn nhiều' : 'chọn 1') + ')</span> <a href="#" data-xg="' + g.id + '" style="color:var(--bad)">xóa nhóm</a><br>' + opts.filter(o => o.group_id === g.id).map(o => '<span class="o">' + QO.esc(o.name) + (o.extra_price ? ' +' + QO.money(o.extra_price) : '') + '<button data-xo="' + o.id + '" title="Xóa">×</button></span>').join('') + '<form class="mini" data-og="' + g.id + '"><input name="name" placeholder="Tên lựa chọn" required><input name="extra" type="number" min="0" step="1000" placeholder="Giá thêm"><button class="btn sm">Thêm</button></form></div>').join('')
+        + '<form class="mini" data-ng="' + d.id + '"><input name="name" placeholder="Nhóm mới (VD: Size)" required><label class="check" style="margin:0"><input type="checkbox" name="req">Bắt buộc</label><label class="check" style="margin:0"><input type="checkbox" name="mul">Nhiều</label><button class="btn sm">Thêm nhóm</button></form></div></div>'; }).join('') : '<div class="empty"><b>Chưa có món nào</b>Thêm danh mục rồi thêm món ở bên trái.</div>'; };
+  cf.onsubmit = async e => { e.preventDefault(); try { await QO.put('categories', {name: cf.name.value.trim()}); cf.reset(); load(); } catch { QO.toast('Danh mục đã tồn tại'); } };
+  df.onsubmit = async e => { e.preventDefault(); if (!df.category_id.value) { er.textContent = 'Cần có danh mục trước.'; return; } er.textContent = '';
+    const old = df.id.value ? dishes.find(d => d.id === Number(df.id.value)) : {shop_id: shop.id, is_deleted: false};
+    await QO.put('dishes', {...old, name: df.name.value.trim(), price: Number(df.price.value), category_id: Number(df.category_id.value), is_available: df.is_available.checked});
+    reset(); load(); QO.toast('Đã lưu món'); };
+  const reset = () => { df.reset(); df.id.value = ''; dt.textContent = 'Thêm món'; }; rs.onclick = reset;
+  root.onclick = async e => { const b = e.target.closest('[data-ed],[data-av],[data-rm],[data-xc],[data-xg],[data-xo]'); if (!b) return; e.preventDefault(); const D = b.dataset;
+    if (D.xc) await QO.del('categories', D.xc);
+    if (D.xg) { for (const o of opts.filter(o => o.group_id === Number(D.xg))) await QO.del('options', o.id); await QO.del('optionGroups', D.xg); }
+    if (D.xo) await QO.del('options', D.xo);
+    if (D.av) { const d = dishes.find(x => x.id === Number(D.av)); d.is_available = !d.is_available; await QO.put('dishes', d); }
+    if (D.rm && confirm('Xóa món này? (xóa mềm, đơn cũ vẫn giữ)')) { const d = dishes.find(x => x.id === Number(D.rm)); d.is_deleted = true; await QO.put('dishes', d); }
+    if (D.ed) { const d = dishes.find(x => x.id === Number(D.ed)); df.id.value = d.id; df.name.value = d.name; df.price.value = d.price; df.category_id.value = d.category_id; df.is_available.checked = d.is_available; dt.textContent = 'Sửa món'; df.scrollIntoView({behavior: 'smooth'}); return; }
+    load(); };
+  root.addEventListener('submit', async e => { const f = e.target; if (f.dataset.ng) { e.preventDefault(); await QO.put('optionGroups', {dish_id: Number(f.dataset.ng), name: f.name.value.trim(), is_required: f.req.checked, is_multiple: f.mul.checked}); load(); }
+    if (f.dataset.og) { e.preventDefault(); await QO.put('options', {group_id: Number(f.dataset.og), name: f.name.value.trim(), extra_price: Number(f.extra.value) || 0}); load(); } });
+  load(); })();
+</script></body></html>
