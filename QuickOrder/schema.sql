@@ -139,6 +139,22 @@ CREATE TABLE IF NOT EXISTS order_items (
         ON UPDATE CASCADE ON DELETE RESTRICT
 );
 
+-- Ảnh chụp tùy chọn lúc đặt: tên và giá thêm không đổi dù quán sau này sửa hoặc xóa tùy chọn (BR-04).
+-- option_id thành NULL khi tùy chọn bị xóa. Đơn đặt trước khi có bảng này không có dòng nào.
+CREATE TABLE IF NOT EXISTS order_item_options (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_item_id INTEGER NOT NULL,
+    option_id INTEGER,
+    option_name TEXT NOT NULL,
+    extra_price INTEGER NOT NULL DEFAULT 0,
+    group_name TEXT NOT NULL DEFAULT '',
+    FOREIGN KEY (order_item_id) REFERENCES order_items(id)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+    FOREIGN KEY (option_id) REFERENCES options(id)
+        ON UPDATE CASCADE ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_order_item_options_item ON order_item_options(order_item_id);
+
 CREATE INDEX IF NOT EXISTS idx_orders_shop
     ON orders(shop_id);
 

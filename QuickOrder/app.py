@@ -830,8 +830,20 @@ def items_of(c, ids):
         rows = c.execute(
             f"SELECT oi.*, d.name AS dish_name FROM order_items oi JOIN dishes d ON d.id = oi.dish_id "
             f"WHERE oi.order_id IN ({marks}) ORDER BY oi.id", list(ids))
+        items = {}
         for r in rows:
-            by[r["order_id"]].append(out(r))
+            item = out(r)
+            item["options"] = []                    # ảnh chụp tùy chọn lúc đặt; đơn cũ không có thì rỗng
+            items[item["id"]] = item
+            by[r["order_id"]].append(item)
+        if items:
+            opt_marks = ",".join("?" * len(items))
+            for o in c.execute(
+                    f"SELECT order_item_id, option_id, option_name, extra_price, group_name FROM order_item_options "
+                    f"WHERE order_item_id IN ({opt_marks}) ORDER BY id", list(items)):
+                items[o["order_item_id"]]["options"].append(
+                    {"option_id": o["option_id"], "name": o["option_name"],
+                     "extra_price": o["extra_price"], "group_name": o["group_name"]})
     return by
 
 
@@ -881,7 +893,7 @@ def as_int(v):
 
 
 def price_item(c, shop_id, item):
-    """Kiểm tra một dòng món và tính giá. Trả về ((dish_id, số lượng, đơn giá, ghi chú, id tùy chọn), None) hoặc (None, lỗi).
+    """Kiểm tra một dòng món và tính giá. Trả về ((dish_id, số lượng, đơn giá, ghi chú, id tùy chọn, ảnh chụp tùy chọn), None) hoặc (None, lỗi).
     Đơn giá gồm giá món cộng giá thêm của các tùy chọn đã chọn; tên tùy chọn được ghi vào ghi chú của dòng."""
     if not isinstance(item, dict):
         return None, "Món trong đơn không hợp lệ."
@@ -923,7 +935,9 @@ def price_item(c, shop_id, item):
             return None, f'Món {dish["name"]}: nhóm "{g["name"]}" chỉ được chọn một.'
     unit = int(dish["price"]) + sum(int(o["extra_price"]) for o in chosen)
     full_note = "; ".join(p for p in (", ".join(o["name"] for o in chosen), note) if p)
-    return (dish_id, qty, unit, full_note, ",".join(str(o["id"]) for o in chosen)), None
+    gname = {g["id"]: g["name"] for g in groups}
+    snap = [(o["id"], o["name"], int(o["extra_price"]), gname[o["group_id"]]) for o in chosen]   # ảnh chụp để lưu cùng đơn
+    return (dish_id, qty, unit, full_note, ",".join(str(o["id"]) for o in chosen), snap), None
 
 
 def price_lines(c, shop_id, items):
@@ -1025,9 +1039,13 @@ def create_order():
             "coupon_code, discount_amount, user_id) VALUES (?,?,?,?,?,?,?,?,?,?)",
             (shop_id, table_id, customer, payment_method, total, note, token_hash(token),
              cp["code"] if cp else "", discount, user_id)).lastrowid
-        c.executemany(
-            "INSERT INTO order_items (order_id, dish_id, quantity, unit_price, note, option_ids) VALUES (?,?,?,?,?,?)",
-            [(order_id, dish_id, qty, unit, line_note, opt_ids) for dish_id, qty, unit, line_note, opt_ids in lines])
+        for dish_id, qty, unit, line_note, opt_ids, snap in lines:
+            item_id = c.execute(
+                "INSERT INTO order_items (order_id, dish_id, quantity, unit_price, note, option_ids) VALUES (?,?,?,?,?,?)",
+                (order_id, dish_id, qty, unit, line_note, opt_ids)).lastrowid
+            c.executemany(
+                "INSERT INTO order_item_options (order_item_id, option_id, option_name, extra_price, group_name) VALUES (?,?,?,?,?)",
+                [(item_id, oid, name, price, gname) for oid, name, price, gname in snap])
         result = order_json(c, order_id)
     result["access_token"] = token
     result["in_my_history"] = user_id is not None
