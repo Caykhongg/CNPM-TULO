@@ -1,8 +1,8 @@
-<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tài khoản khách - QuickOrder</title><link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@500;600&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"><link rel="stylesheet" href="../css/style.css"><script src="../js/app.js"></script></head><body>
-<div class="wrap narrow">
+<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tài khoản khách - QuickOrder</title><link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="../css/style.css"><script src="../js/app.js"></script></head><body>
+<div class="wrap" style="max-width:480px">
   <h1>Tài khoản khách</h1>
   <p class="sub">Tài khoản giữ hồ sơ của bạn lâu dài, đăng nhập được trên mọi thiết bị.</p>
-  <div class="tabs chips" aria-label="Chọn đăng nhập hoặc tạo tài khoản">
+  <div class="chips" aria-label="Chọn đăng nhập hoặc tạo tài khoản">
     <button class="chip on" id="tl" type="button">Đăng nhập</button>
     <button class="chip" id="tr" type="button">Tạo tài khoản</button>
   </div>
@@ -10,8 +10,8 @@
   <form class="card" id="login">
     <label class="field"><span>Email</span><input name="email" type="email" autocomplete="username" required></label>
     <label class="field"><span>Mật khẩu</span><input name="password" type="password" autocomplete="current-password" required></label>
-    <div class="err mb-2" id="le"></div>
-    <button class="btn block">Đăng nhập</button>
+    <div class="err" id="le"></div>
+    <button class="btn" style="width:100%">Đăng nhập</button>
   </form>
 
   <form class="card" id="reg" hidden>
@@ -19,22 +19,22 @@
     <label class="field"><span>Số điện thoại</span><input name="phone" type="tel" autocomplete="tel" required></label>
     <label class="field"><span>Email</span><input name="email" type="email" autocomplete="email" required></label>
     <label class="field"><span>Mật khẩu (tối thiểu 8 ký tự)</span><input name="password" type="password" minlength="8" autocomplete="new-password" required></label>
-    <div class="err mb-2" id="re"></div>
-    <button class="btn block">Gửi mã xác nhận</button>
-    <p class="meta mt-2">Chúng tôi sẽ gửi mã 6 số tới email để xác nhận đúng chủ email.</p>
+    <div class="err" id="re"></div>
+    <button class="btn" style="width:100%">Gửi mã xác nhận</button>
+    <p class="meta" style="margin-top:10px">Chúng tôi sẽ gửi mã 6 số tới email để xác nhận đúng chủ email.</p>
   </form>
 
   <form class="card" id="code" hidden>
     <h2>Nhập mã xác nhận</h2>
-    <p class="meta mb-2">Mã 6 số đã gửi tới <b id="sentTo"></b>, có hiệu lực 10 phút. Không thấy thư? Hãy kiểm tra mục thư rác.</p>
+    <p class="meta" style="margin-bottom:12px">Mã 6 số đã gửi tới <b id="sentTo"></b>, có hiệu lực 10 phút. Không thấy thư? Hãy kiểm tra mục thư rác.</p>
     <label class="field"><span>Mã 6 số</span><input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required></label>
-    <div class="err mb-2" id="ce"></div>
-    <button class="btn block">Xác nhận và tạo tài khoản</button>
-    <div class="acts mt-2">
+    <div class="err" id="ce"></div>
+    <button class="btn" style="width:100%">Xác nhận và tạo tài khoản</button>
+    <div class="row" style="margin-top:12px">
       <button class="btn ghost sm" type="button" id="back">Sửa thông tin</button>
       <button class="btn ghost sm" type="button" id="resend">Gửi lại mã</button>
     </div>
-    <p class="meta mt-2">Email đã có tài khoản sẽ không nhận được mã. Trong trường hợp đó, hãy quay lại và chọn Đăng nhập.</p>
+    <p class="meta" style="margin-top:10px">Email đã có tài khoản sẽ không nhận được mã. Trong trường hợp đó, hãy quay lại và chọn Đăng nhập.</p>
   </form>
 </div>
 <script>
