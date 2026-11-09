@@ -1,17 +1,17 @@
-<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Đơn hàng - QuickOrder</title><link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@500;600&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"><link rel="stylesheet" href="../css/style.css"><script src="../js/app.js"></script></head><body>
+<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Đơn hàng - QuickOrder</title><link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="../css/style.css"><script src="../js/app.js"></script></head><body>
 <div class="wrap">
   <h1>Đơn hàng của bạn</h1>
   <p class="sub">Trạng thái tự cập nhật. Danh sách này lưu trên thiết bị bạn đang dùng. <a href="history.html">Xem lịch sử tài khoản hoặc lưu đơn đã đặt trước khi đăng nhập</a>.</p>
-  <p class="shell mb-2" id="history-warning" role="alert" hidden>Đơn đã gửi thành công nhưng chưa lưu vào tài khoản vì phiên đăng nhập đã thay đổi. Hãy đăng nhập tài khoản khách, mở <a href="history.html">Lịch sử</a> và chọn “Lưu vào lịch sử” cho đơn vừa đặt.</p>
-  <div class="tabs chips" id="chips" aria-label="Lọc theo trạng thái"></div>
-  <div id="list" class="mt-2"><div class="empty"><b>Đang tải...</b></div></div>
+  <p class="err" id="history-warning" role="alert" hidden>Đơn đã gửi thành công nhưng chưa lưu vào tài khoản vì phiên đăng nhập đã thay đổi. Hãy đăng nhập tài khoản khách, mở <a href="history.html">Lịch sử</a> và chọn “Lưu vào lịch sử” cho đơn vừa đặt.</p>
+  <div class="chips" id="chips" aria-label="Lọc theo trạng thái"></div>
+  <div id="list" style="margin-top:14px"><div class="empty"><b>Đang tải...</b></div></div>
 </div>
 <dialog id="rv"><form method="dialog" id="rvf"><h2 id="rvt">Đánh giá đơn</h2>
   <div class="field"><span>Chấm điểm quán</span><div class="chips" id="rvs" role="radiogroup" aria-label="Điểm từ 1 đến 5 sao"></div></div>
   <div id="rvd"></div>
   <label class="field"><span>Nhận xét (không bắt buộc)</span><textarea id="rvc" rows="3" maxlength="500" placeholder="Món ăn, phục vụ, thời gian chờ..."></textarea></label>
   <div class="err" id="rve"></div>
-  <div class="row"><button class="btn ghost" value="x">Để sau</button><button class="btn" id="rvok" value="ok">Gửi đánh giá</button></div></form></dialog>
+  <div class="row" style="margin-top:12px"><button class="btn ghost" value="x">Để sau</button><button class="btn" id="rvok" value="ok">Gửi đánh giá</button></div></form></dialog>
 <script>
 QO.header('customer');
 document.getElementById('history-warning').hidden = QO.param('history') !== 'missing';
@@ -45,26 +45,24 @@ document.getElementById('history-warning').hidden = QO.param('history') !== 'mis
   const card = (s, o) => {
     const [label, tone] = QO.ORDER_STATUS[o.status] || ['Không rõ', ''];
     const items = o.items.map(i => `<li>${i.quantity} × ${QO.esc(i.dish_name)}${i.note ? ` <span class="meta">(${QO.esc(i.note)})</span>` : ''}</li>`).join('');
-    const pay = `<span>${QO.PAY_METHOD[o.payment_method] || ''}</span><span>${o.payment_status === 'PAID' ? 'Đã thanh toán' : 'Chưa thanh toán'}</span>`;
-    const actions = [
-      o.status === 'PENDING' ? `<button class="btn bad sm" data-cancel="${o.id}">Hủy đơn</button>` : '',
-      o.status === 'COMPLETED' && !o.reviewed ? `<button class="btn sm" data-review="${o.id}">Đánh giá đơn</button>` : '',
-      o.status !== 'PENDING' ? `<button class="btn ghost sm" data-complain="${o.id}">Gửi khiếu nại</button>` : '',
-    ].join('');
-    const rated = o.status === 'COMPLETED' && o.reviewed ? '<p class="meta mt-1">Bạn đã đánh giá đơn này. Cảm ơn bạn!</p>' : '';
-    const reason = o.status === 'CANCELLED' && o.cancel_reason ? `<div class="meta mt-1">Lý do: ${QO.esc(o.cancel_reason)}</div>` : '';
-    return `<article class="item block">
+    const pay = `${QO.PAY_METHOD[o.payment_method] || ''} · ${o.payment_status === 'PAID' ? 'Đã thanh toán' : 'Chưa thanh toán'}`;
+    const rate = o.status === 'COMPLETED' ? (o.reviewed
+      ? '<div class="meta" style="margin-top:10px">Bạn đã đánh giá đơn này. Cảm ơn bạn!</div>'
+      : `<div style="margin-top:10px"><button class="btn sm" data-review="${o.id}">Đánh giá đơn</button></div>`) : '';
+    const cancel = o.status === 'PENDING' ? `<div style="margin-top:10px"><button class="btn bad sm" data-cancel="${o.id}">Hủy đơn</button></div>` : '';
+    const complain = o.status !== 'PENDING' ? `<div style="margin-top:10px"><button class="btn ghost sm" data-complain="${o.id}">Gửi khiếu nại</button></div>` : '';
+    const reason = o.status === 'CANCELLED' && o.cancel_reason ? `<div class="meta" style="margin-top:6px">Lý do: ${QO.esc(o.cancel_reason)}</div>` : '';
+    return `<article class="item" style="display:block">
       <div class="row">
-        <div><h3>Đơn #${o.id}</h3><div class="meta">${QO.esc(s.shop_name || 'Quán')}</div><div class="meta">${QO.esc(QO.tableLabel(s.table_number))}, ${QO.esc(QO.fmtTime(o.created_at))}</div></div>
+        <div><h3>Đơn #${o.id} · ${QO.esc(s.shop_name || 'Quán')}</h3><div class="meta">${QO.esc(QO.tableLabel(s.table_number))} · ${QO.esc(QO.fmtTime(o.created_at))}</div></div>
         <span class="tag ${tone}">${label}</span>
       </div>
-      <ul class="items">${items}</ul>
-      ${o.note ? `<div class="meta mt-1">Ghi chú: ${QO.esc(o.note)}</div>` : ''}
-      <div class="row mt-1"><span class="meta pair">${pay}</span><span class="price">${QO.money(o.total_amount)}</span></div>
-      ${o.discount_amount ? `<div class="meta mt-1">Đã giảm ${QO.money(o.discount_amount)} (mã ${QO.esc(o.coupon_code)})</div>` : ''}
+      <ul style="margin:10px 0 6px;padding-left:18px">${items}</ul>
+      ${o.note ? `<div class="meta">Ghi chú: ${QO.esc(o.note)}</div>` : ''}
+      <div class="row" style="margin-top:8px"><span class="meta">${pay}</span><span class="price">${QO.money(o.total_amount)}</span></div>
+      ${o.discount_amount ? `<div class="meta" style="margin-top:4px">Đã giảm ${QO.money(o.discount_amount)} (mã ${QO.esc(o.coupon_code)})</div>` : ''}
       ${reason}
-      ${rated}
-      ${actions ? `<div class="acts mt-2">${actions}</div>` : ''}
+      ${cancel}${rate}${complain}
     </article>`;
   };
 
@@ -75,7 +73,7 @@ document.getElementById('history-warning').hidden = QO.param('history') !== 'mis
       return;
     }
     const rows = saved.map(s => ({s, o: cache.get(s.id)})).filter(({o}) => o && (!filter || bucket(o.status) === filter));
-    const note = loadError ? `<div class="err mb-2">${QO.esc(loadError)}</div>` : '';
+    const note = loadError ? `<div class="err" style="margin-bottom:12px">${QO.esc(loadError)}</div>` : '';
     listEl.innerHTML = note + (rows.length
       ? '<div class="list">' + rows.map(({s, o}) => card(s, o)).join('') + '</div>'
       : '<div class="empty"><b>Không có đơn ở mục này</b></div>');
@@ -89,8 +87,8 @@ document.getElementById('history-warning').hidden = QO.param('history') !== 'mis
   const starBtns = (cur, attr) => [1, 2, 3, 4, 5].map(n => `<button type="button" class="chip${cur === n ? ' on' : ''}" ${attr}="${n}" role="radio" aria-checked="${cur === n}" aria-label="${n} sao">${n}★</button>`).join('');
   const drawRv = () => {
     rvs.innerHTML = starBtns(stars, 'data-s');
-    document.getElementById('rvd').innerHTML = reviewing.items.length > 1 ? '<div class="meta mb-2">Chấm riêng từng món (không bắt buộc)</div>' + reviewing.items.map(i =>
-      `<div class="field"><span>${QO.esc(i.dish_name)}</span><div class="chips" data-dish="${i.dish_id}">${starBtns(dishStars[i.dish_id] || 0, 'data-ds')}</div></div>`).join('') : '';
+    document.getElementById('rvd').innerHTML = reviewing.items.length > 1 ? '<div class="meta" style="margin-bottom:6px">Chấm riêng từng món (không bắt buộc)</div>' + reviewing.items.map(i =>
+      `<div class="field"><span>${QO.esc(i.dish_name)}</span><div class="chips" data-dish="${i.dish_id}" style="margin:0">${starBtns(dishStars[i.dish_id] || 0, 'data-ds')}</div></div>`).join('') : '';
   };
   rvs.onclick = e => { const b = e.target.closest('[data-s]'); if (b) { stars = Number(b.dataset.s); drawRv(); } };
   document.getElementById('rvd').onclick = e => {

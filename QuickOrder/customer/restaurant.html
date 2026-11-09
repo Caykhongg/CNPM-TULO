@@ -1,6 +1,6 @@
-<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Thực đơn - QuickOrder</title><link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@500;600&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"><link rel="stylesheet" href="../css/style.css"><script src="../js/app.js"></script></head><body>
+<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Thực đơn - QuickOrder</title><link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="../css/style.css"><script src="../js/app.js"></script></head><body>
 <div class="wrap" id="root"></div>
-<dialog id="dlg"><form method="dialog" id="f"><h2 id="dn"></h2><div id="gs"></div><div class="err" id="er"></div><div class="row"><button class="btn ghost" value="x">Hủy</button><button class="btn" id="ok" value="ok">Thêm vào giỏ</button></div></form></dialog>
+<dialog id="dlg"><form method="dialog" id="f"><h2 id="dn"></h2><div id="gs"></div><div class="err" id="er"></div><div class="row" style="margin-top:12px"><button class="btn ghost" value="x">Hủy</button><button class="btn" id="ok" value="ok">Thêm vào giỏ</button></div></form></dialog>
 <script>
 QO.header('customer');
 (async () => {
@@ -24,20 +24,16 @@ QO.header('customer');
 
   const [label, tone] = accepting ? ['Đang nhận đơn', 'ok'] : ['Hiện không nhận đơn', 'no'];
   root.innerHTML = `
-    <header class="shop-head">
+    <section class="card shop-head" style="margin-top:8px">
       <div class="row">
-        <h1>${QO.esc(shop.name)}</h1>
+        <div><h1>${QO.esc(shop.name)}</h1><p class="sub" style="margin-bottom:0">${QO.esc(shop.address)}</p></div>
         <span class="tag ${tone}">${label}</span>
       </div>
-      <p class="sub">${QO.esc(shop.address)}</p>
-      <dl class="facts">
-        <div><dt>Giờ mở cửa</dt><dd>${QO.esc(shop.open_time)} – ${QO.esc(shop.close_time)}</dd></div>
-        <div><dt>Điện thoại</dt><dd>${QO.esc(shop.phone)}</dd></div>
-      </dl>
-      ${scanOk ? `<p class="table-note">Bạn đang gọi món cho <b>${QO.esc(QO.tableLabel(tb.table_number))}</b>.</p>` : '<p class="err table-note">Hãy dùng camera điện thoại quét mã QR trên bàn để gọi món. Mã cũ có thể đã được đổi, hãy quét lại mã trên bàn.</p>'}
-    </header>
-    <div class="search mt-2"><input id="q" type="search" placeholder="Tìm món trong quán..." value="${QO.esc(q)}" aria-label="Tìm món trong quán"></div>
-    <div class="tabs chips mt-2" id="chips"></div>
+      <div class="meta" style="margin-top:8px">Giờ mở cửa ${QO.esc(shop.open_time)} – ${QO.esc(shop.close_time)} · ${QO.esc(shop.phone)}</div>
+      ${scanOk ? `<div class="meta" style="margin-top:6px">Bạn đang gọi món cho <b>${QO.esc(QO.tableLabel(tb.table_number))}</b>.</div>` : '<div class="err" style="margin-top:8px">Hãy dùng camera điện thoại quét mã QR trên bàn để gọi món. Mã cũ có thể đã được đổi, hãy quét lại mã trên bàn.</div>'}
+    </section>
+    <div class="search" style="border:1px solid var(--line);max-width:none;margin-top:18px"><input id="q" type="search" placeholder="Tìm món trong quán..." value="${QO.esc(q)}" aria-label="Tìm món trong quán"></div>
+    <div class="chips" id="chips"></div>
     <div id="menu"></div>`;
 
   const menuEl = document.getElementById('menu'), chipsEl = document.getElementById('chips');
@@ -55,9 +51,9 @@ QO.header('customer');
     const k = QO.norm(q), shown = dishes.filter(d => (!cat || d.category_id === cat) && (!k || QO.norm(d.name).includes(k)));
     const used = cats.filter(c => dishes.some(d => d.category_id === c.id));
     const sections = used.filter(c => shown.some(d => d.category_id === c.id))
-      .map(c => `<section class="sec"><h2>${QO.esc(c.name)}</h2><div class="list">${shown.filter(d => d.category_id === c.id).map(card).join('')}</div></section>`).join('');
+      .map(c => `<h2 style="margin-top:22px">${QO.esc(c.name)}</h2><div class="list">${shown.filter(d => d.category_id === c.id).map(card).join('')}</div>`).join('');
     const pick = list => list.map(x => dishes.find(d => d.id === x.dish_id)).filter(Boolean);
-    const block = (title, list) => list.length ? `<section class="sec"><h2>${title}</h2><div class="list">${list.map(card).join('')}</div></section>` : '';
+    const block = (title, list) => list.length ? `<h2 style="margin-top:22px">${title}</h2><div class="list">${list.map(card).join('')}</div>` : '';
     const sugHtml = !k && !cat ? block('Bạn hay gọi', pick(sug.mine)) + block('Món bán chạy', pick(sug.popular)) : '';   // chỉ hiện khi không tìm kiếm hay lọc
     menuEl.innerHTML = dishes.length ? (sugHtml + (sections || '<div class="empty"><b>Không có món phù hợp</b></div>')) : '<div class="empty"><b>Quán chưa có món</b>Menu sẽ hiển thị khi quán thêm món.</div>';
     chipsEl.innerHTML = used.length
@@ -87,7 +83,7 @@ QO.header('customer');
     const gs = groupsOf(cur);
     if (!gs.length) return push(cur, []);
     dn.textContent = cur.name; er.textContent = '';
-    gsEl.innerHTML = gs.map(g => `<fieldset class="grp"><legend>${QO.esc(g.name)} <span class="meta">(${g.is_required ? 'bắt buộc' : 'tùy chọn'}, chọn ${g.is_multiple ? 'nhiều' : '1'})</span></legend>${optsOf(g).map(o => `<label><span><input type="${g.is_multiple ? 'checkbox' : 'radio'}" name="g${g.id}" value="${o.id}">${QO.esc(o.name)}</span><span class="meta">${o.extra_price ? '+' + QO.money(o.extra_price) : ''}</span></label>`).join('')}</fieldset>`).join('');
+    gsEl.innerHTML = gs.map(g => `<fieldset class="grp" style="border:0"><legend>${QO.esc(g.name)} <span class="meta">(${g.is_required ? 'bắt buộc' : 'tùy chọn'}, chọn ${g.is_multiple ? 'nhiều' : '1'})</span></legend>${optsOf(g).map(o => `<label><span><input type="${g.is_multiple ? 'checkbox' : 'radio'}" name="g${g.id}" value="${o.id}" style="width:auto;margin-right:8px">${QO.esc(o.name)}</span><span class="meta">${o.extra_price ? '+' + QO.money(o.extra_price) : ''}</span></label>`).join('')}</fieldset>`).join('');
     dlg.showModal();
   };
 
