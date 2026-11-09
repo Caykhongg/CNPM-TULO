@@ -317,6 +317,74 @@ class OrderTests(unittest.TestCase):
         self.assertEqual(owner.put(url, json=body).status_code, 409)
 
 
+    # ----- ảnh chụp tùy chọn lúc đặt (order_item_options) -----
+    def snapshot_rows(self, order_id):
+        with self.qo.db() as c:
+            return [dict(r) for r in c.execute(
+                "SELECT oo.option_id, oo.option_name, oo.extra_price, oo.group_name FROM order_item_options oo "
+                "JOIN order_items oi ON oi.id = oo.order_item_id WHERE oi.order_id = ? ORDER BY oo.id", (order_id,))]
+
+    def view_options(self, body):
+        resp = self.guest.get(f"/api/orders/{body['id']}?token={body['access_token']}")
+        self.assertEqual(resp.status_code, 200, resp.get_json())
+        return resp.get_json()["items"][0]["options"]
+
+    def test_order_saves_option_name_and_price(self):
+        body = self.make_order()                   # Size: Nhỏ, Topping: Trân châu
+        self.assertEqual(self.snapshot_rows(body["id"]), [
+            {"option_id": self.opt_small, "option_name": "Nhỏ", "extra_price": 0, "group_name": "Size"},
+            {"option_id": self.opt_pearl, "option_name": "Trân châu", "extra_price": 5000, "group_name": "Topping"},
+        ])
+
+    def test_options_appear_in_create_response_and_order_view(self):
+        body = self.make_order()
+        expected = [{"option_id": self.opt_small, "name": "Nhỏ", "extra_price": 0, "group_name": "Size"},
+                    {"option_id": self.opt_pearl, "name": "Trân châu", "extra_price": 5000, "group_name": "Topping"}]
+        self.assertEqual(body["items"][0]["options"], expected)
+        self.assertEqual(self.view_options(body), expected)
+
+    def test_snapshot_unchanged_after_option_edited_or_deleted(self):
+        body = self.make_order()
+        with self.qo.db() as c:
+            c.execute("UPDATE options SET name = 'Nhỏ (đổi tên)', extra_price = 9999 WHERE id = ?", (self.opt_small,))
+            c.execute("DELETE FROM options WHERE id = ?", (self.opt_pearl,))
+        self.assertEqual([(o["option_id"], o["name"], o["extra_price"]) for o in self.view_options(body)],
+                         [(self.opt_small, "Nhỏ", 0), (None, "Trân châu", 5000)])
+        self.assertEqual(body["total_amount"], 2 * (50000 + 0 + 5000))   # tổng tiền đã chốt lúc đặt
+
+    # ----- hóa đơn bàn và thanh toán bàn: chỉ chủ quán của quán đó -----
+    def test_bills_and_table_settlement_are_limited_to_own_shop(self):
+        body = self.make_order()                   # 2 x (50.000 + 0 + 5.000) = 110.000
+        owner_a, owner_b = self.login("a@quan.vn"), self.login("b@quan.vn")
+        self.assertEqual(self.guest.get(f"/api/shops/{self.shop}/bills").status_code, 401)
+        self.assertEqual(owner_b.get(f"/api/shops/{self.shop}/bills").status_code, 403)
+        self.assertEqual(owner_b.post(f"/api/tables/{self.table}/settle", json={}).status_code, 403)
+        # chủ quán B thanh toán bàn của mình với mã đơn của quán A: không khớp đơn nào
+        self.assertEqual(owner_b.post(f"/api/tables/{self.other_table}/settle",
+                                      json={"order_ids": [body["id"]]}).status_code, 409)
+        bills = owner_a.get(f"/api/shops/{self.shop}/bills").get_json()
+        self.assertEqual([(b["table_number"], b["total"]) for b in bills], [("1", 110000)])
+        self.assertEqual(owner_a.post(f"/api/tables/{self.table}/settle", json={}).get_json(), {"settled": 1, "total": 110000})
+        self.assertEqual(owner_a.get(f"/api/shops/{self.shop}/bills").get_json(), [])
+        resp = self.guest.get(f"/api/orders/{body['id']}?token={body['access_token']}")
+        self.assertEqual(resp.get_json()["payment_status"], "PAID")
+
+    def test_cancelled_order_is_not_billed(self):
+        cancelled = self.make_order()
+        resp = self.guest.put(f"/api/orders/{cancelled['id']}/cancel", json={"token": cancelled["access_token"]})
+        self.assertEqual(resp.status_code, 200, resp.get_json())
+        owner_a = self.login("a@quan.vn")
+        self.assertEqual(owner_a.get(f"/api/shops/{self.shop}/bills").get_json(), [])
+        self.assertEqual(owner_a.post(f"/api/tables/{self.table}/settle", json={}).status_code, 409)
+
+    def test_order_without_snapshot_shows_empty_options(self):
+        # Đơn đặt trước khi có bảng ảnh chụp: không có dòng nào, nên options rỗng và các trường khác vẫn đủ
+        body = self.make_order()
+        with self.qo.db() as c:
+            c.execute("DELETE FROM order_item_options")
+        self.assertEqual(self.view_options(body), [])
+
+
 class OldOrderTableTests(unittest.TestCase):
     """CSDL có bảng orders tạo trước khi thêm mã đơn và lý do hủy vẫn được bổ sung cột khi khởi động."""
 

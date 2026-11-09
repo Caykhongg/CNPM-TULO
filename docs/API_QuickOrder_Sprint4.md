@@ -40,7 +40,9 @@ Mọi chuyển khác trả 409. Trạng thái thanh toán (`UNPAID`, `PAID`) đ�
 
 Các trường chính: `id`, `shop_id`, `table_id`, `table_number` (khi xem một đơn), `customer_name`, `status`, `payment_method` (`CASH` hoặc `TRANSFER`), `payment_status`, `total_amount`, `discount_amount`, `coupon_code`, `note`, `cancel_reason`, `created_at`, `reviewed`, `items[]`.
 
-Mỗi phần tử `items`: `dish_id`, `dish_name`, `quantity`, `unit_price`, `note`, `option_ids`.
+Mỗi phần tử `items`: `dish_id`, `dish_name`, `quantity`, `unit_price`, `note`, `option_ids`, `options`.
+
+- `options` là ảnh chụp các tùy chọn lúc đặt: `[{option_id, name, extra_price, group_name}]`. Sửa hoặc xóa tùy chọn sau đó không đổi phần này. `option_id` thành `null` nếu tùy chọn đã bị xóa. Đơn đặt trước khi có trường này thì `options` rỗng.
 
 - `unit_price` = giá món + tổng giá cộng thêm của các tùy chọn đã chọn, chốt tại lúc gửi đơn (BR-04).
 - `note` của dòng món ghép tên các tùy chọn đã chọn với ghi chú của khách, ví dụ `Lớn, Trân châu; ít đá`.
@@ -160,3 +162,5 @@ Doanh thu và món bán chạy chỉ tính đơn `COMPLETED` (BR-17), tính theo
 | 5 | Ngoại lệ FR-17: báo tên món vừa hết | Thông báo ghi mã món | Đổi thông báo sang tên món |
 
 Đã sửa trong đợt này (commit `d36fc67`): `PENDING` không còn chuyển được sang `CONFIRMED`.
+
+Thêm theo issue Sprint 4 của Nguyễn Tú Anh (#52): bảng `order_item_options` lưu ảnh chụp tên và giá thêm của tùy chọn lúc đặt (mục 3).
