@@ -69,9 +69,15 @@ const QO = (() => {
 
   // Danh sách đơn khách đã gửi, lưu trên thiết bị này (localStorage) để xem lại sau khi đóng tab.
   // Mỗi mục: {id, shop_id, shop_name, table_number}. Server vẫn là nguồn chính về trạng thái đơn.
-  const getOrders = () => { try { return JSON.parse(localStorage.getItem('qo_orders')) || []; } catch { return []; } };
-  const saveOrders = list => { try { localStorage.setItem('qo_orders', JSON.stringify(list)); } catch {} };
+  const getOrders = () => { try {
+    const rows = JSON.parse(localStorage.getItem('qo_orders'));
+    return Array.isArray(rows) ? rows.filter(o => o && Number.isSafeInteger(Number(o.id)) && Number(o.id) > 0)
+      .map(o => ({...o, id: Number(o.id)})).slice(0, 30) : [];
+  } catch { return []; } };
+  const saveOrders = list => { try { localStorage.setItem('qo_orders', JSON.stringify(list)); return true; } catch { return false; } };
   const addOrder = o => saveOrders([o, ...getOrders().filter(x => x.id !== o.id)].slice(0, 30));
+  // Mã dự phòng nằm trong fragment khi trình duyệt không lưu được đơn; fragment không gửi lên server.
+  const orderTrackingUrl = (id, token = '') => 'track.html?id=' + Number(id) + (token ? '#token=' + encodeURIComponent(token) : '');
 
   // ===== Khiếu nại đơn hàng (FR-26) =====
   // Hộp thoại dùng chung: khách có tài khoản gọi {orderId}; khách ẩn danh gọi thêm {token} (mã riêng của đơn lưu trên thiết bị).
@@ -166,5 +172,5 @@ const QO = (() => {
 
   return {api, all, get, by, put, del, isOpenNow, isAccepting, isOrderable, validateSelection, qrUrl, STATUS, ORDER_STATUS, PAY_METHOD,
     esc, money, norm, hash, toast, param, parseTime, fmtTime, tableLabel, session, logout, requireOwner, myShop, getCart, setCart, getGuest, setGuest, clearGuest,
-    getOrders, saveOrders, addOrder, complaintDialog, COMPLAINT_STATUS, header};
+    getOrders, saveOrders, addOrder, orderTrackingUrl, complaintDialog, COMPLAINT_STATUS, header};
 })();

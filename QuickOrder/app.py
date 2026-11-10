@@ -1147,11 +1147,13 @@ def update_order_status(id):
 
 @app.put("/api/orders/<int:id>/cancel")
 def cancel_order(id):
-    """Khách hủy đơn của mình bằng mã riêng của đơn, chỉ khi quán chưa xác nhận."""
+    """Khách hủy đơn bằng mã riêng hoặc tài khoản sở hữu đơn, chỉ khi quán chưa xác nhận."""
     d = json_body()
     with db() as c:
         order = c.execute("SELECT * FROM orders WHERE id = ?", (id,)).fetchone()
-        if not order or not token_ok(order, str(d.get("token") or "")):
+        u = current_user()
+        mine = order and u and u["role"] == "customer" and order["user_id"] == u["id"]
+        if not order or not (mine or token_ok(order, str(d.get("token") or ""))):
             abort(404)
         done = c.execute("UPDATE orders SET status = 'CANCELLED', cancel_reason = ? WHERE id = ? AND status = 'PENDING'",
                          (CUSTOMER_CANCEL_REASON, id))

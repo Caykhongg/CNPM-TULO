@@ -1,0 +1,22 @@
+.tracking-page{max-width:850px}
+.tracking-page [hidden]{display:none!important}
+.tracking-heading{margin-bottom:6px}
+.tracking-heading h1{margin-top:6px}
+.tracking-page .card{margin-bottom:16px}
+.tracking-page #tracking-error{padding:12px 16px;background:var(--bad-s);border-radius:10px;margin-bottom:16px}
+.order-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;list-style:none;margin:22px 0 6px}
+.order-steps li{border-top:4px solid var(--line);padding-top:12px;color:var(--muted);font-size:13px}
+.order-steps li.done{border-color:var(--pri);color:var(--pri-d)}
+.order-steps li.current{font-weight:700;color:var(--ink);border-color:var(--acc)}
+.step-number{display:inline-flex;align-items:center;justify-content:center;width:25px;height:25px;background:var(--bg);border-radius:50%;margin-right:5px}
+.order-steps .done .step-number{background:var(--pri-s)}
+.order-steps .current .step-number{background:var(--acc-s)}
+.tracking-items{list-style:none}
+.tracking-items li{padding:12px 0;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:14px}
+.tracking-items li:last-child{border-bottom:0}
+.tracking-items .price{white-space:nowrap}
+.tracking-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
+.tracking-note{white-space:pre-wrap;overflow-wrap:anywhere}
+.tracking-total{margin-top:12px;padding-top:14px;border-top:1px solid var(--line)}
+.tracking-page a:not(.btn){text-decoration:underline;text-underline-offset:3px}
+@media(max-width:480px){.order-steps{gap:6px}.step-number{display:flex;margin-bottom:6px}.tracking-heading{align-items:flex-start}}

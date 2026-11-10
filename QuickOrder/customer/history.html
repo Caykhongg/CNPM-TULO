@@ -51,7 +51,7 @@ QO.header('customer');
       ${reason}
       <div class="row" style="margin-top:10px;justify-content:flex-start;gap:8px;flex-wrap:wrap">${device
         ? `<button class="btn sm" data-save="${o.id}">Lưu vào lịch sử</button>`
-        : `<button class="btn sm" data-again="${o.id}">Đặt lại món</button>${complain}`}</div>
+        : `<a class="btn ghost sm" href="${QO.orderTrackingUrl(o.id)}">Theo dõi đơn</a><button class="btn sm" data-again="${o.id}">Đặt lại món</button>${complain}`}</div>
     </article>`;
   };
 
