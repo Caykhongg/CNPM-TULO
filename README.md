@@ -383,6 +383,14 @@ refactor: tách hàm tính giá
 | 9 | 🔄 **Sprint 4** | Kiểm thử tổng thể (test case thủ công và báo cáo kiểm thử Sprint 3), đo hiệu năng, sửa lỗi |
 | 10 | Hoàn thiện | Deploy, tài liệu hướng dẫn, báo cáo, slide, demo |
 
+## Đặt và theo dõi đơn của khách
+
+Đặt thành công mở trang `/customer/track.html?id=...`. Trang theo dõi và danh sách đơn cập nhật mỗi 7 giây; khách hủy được khi đơn còn Chờ xác nhận. Có nút Tải lại khi lỗi kết nối và liên kết theo dõi từ Lịch sử tài khoản.
+
+Hướng dẫn thao tác, kiểm thử, file liên quan và hoàn thiện thiết kế Figma: [Luồng đơn hàng khách](docs/Hoan_thien_don_hang_khach.md). Các mẫu SVG để nhập vào Figma nằm trong [docs/figma-don-hang](docs/figma-don-hang/); cần bổ sung link file Figma thật sau khi hoàn thiện.
+
+Kiểm thử logic JavaScript (nếu có Node.js): chạy `node --test tests/test_customer_order_pages.cjs` trong `QuickOrder/`. Kiểm thử Python tiếp tục dùng `python -m unittest discover -s tests -v`.
+
 ## 👨‍💻 Thành viên nhóm
 
 | STT | Họ và tên | MSSV | Vai trò |

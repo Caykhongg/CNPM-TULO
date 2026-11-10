@@ -19,7 +19,7 @@
       <label class="field"><span>Ghi chú</span><textarea name="note" rows="2" maxlength="300" placeholder="VD: ít đá, không hành"></textarea></label>
       <div class="err" id="err"></div>
       <button class="btn" type="button" id="order" disabled style="width:100%">Đặt hàng</button>
-      <p class="meta" style="margin-top:10px">Đơn sẽ được gửi tới quán. Bạn theo dõi trạng thái ở mục Đơn hàng.</p>
+      <p class="meta" style="margin-top:10px">Đặt thành công sẽ mở trang theo dõi đơn. Bạn cũng xem lại ở mục Đơn hàng.</p>
       <p class="meta" id="history-note" role="status"></p>
     </aside>
   </div>
@@ -167,10 +167,11 @@ QO.header('customer');
     if (sending) return;                          // chặn bấm đúp (NFR-31)
     const c = QO.getCart();
     errEl.textContent = '';
-    if (!c.items.length || !tb) return;
+    if (!c.items.length || !tb || !shop || !QO.isAccepting(shop)) return;
     sending = true; draw();
+    let order;
     try {
-      const order = await QO.api('POST', 'orders', {
+      order = await QO.api('POST', 'orders', {
         shop_id: c.shop_id,
         table_id: tb.id,
         customer_name: (nameEl.value || '').trim() || 'Khách tại bàn',
@@ -179,14 +180,17 @@ QO.header('customer');
         coupon_code: quote ? quote.coupon_code : '',
         items: c.items.map(i => ({dish_id: i.dish_id, quantity: i.qty, option_ids: i.options.map(o => o.id)})),
       });
-      // Lưu mã riêng của đơn trên thiết bị này để xem và hủy đơn sau này (server chỉ trả mã này một lần)
-      QO.addOrder({id: order.id, token: order.access_token, shop_id: order.shop_id, shop_name: shop.name, table_number: tb.table_number});
-      QO.setCart({shop_id: null, table: null, items: []});
-      location.href = 'orders.html' + (who && who.role === 'customer' && !order.in_my_history ? '?history=missing' : '');
     } catch (e) {
       errEl.textContent = e.message;
       sending = false; draw();
+      return;
     }
+    // Tách lỗi lưu trên thiết bị khỏi lỗi gửi đơn: đơn đã tạo thì chuyển tới theo dõi.
+    const saved = QO.addOrder({id: order.id, token: order.access_token, shop_id: order.shop_id, shop_name: shop.name, table_number: tb.table_number});
+    try { QO.setCart({shop_id: null, table: null, items: []}); } catch {}
+    const next = new URL(QO.orderTrackingUrl(order.id, saved ? '' : order.access_token), location.href);
+    if (who && who.role === 'customer' && !order.in_my_history) next.searchParams.set('history', 'missing');
+    location.href = next.href;
   };
 
   // Tải quán và xác định bàn từ mã QR đã quét (phải thuộc đúng quán trong giỏ)
