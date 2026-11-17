@@ -139,7 +139,7 @@ QO.header('customer');
     const lines = [];
     if (changed.length) lines.push(`<li>Giá hiện tại khác lần trước: ${changed.map(i => `${QO.esc(i.name)} (${QO.money(i.old_unit_price)} → ${QO.money(i.unit_price)})`).join(', ')}.</li>`);
     if (r.skipped.length) lines.push(...r.skipped.map(s => `<li>Bỏ qua ${QO.esc(s.dish_name)}: ${QO.esc(s.reason)}</li>`));
-    if (!r.accepting) lines.push('<li>Quán hiện không nhận đơn (ngoài giờ mở cửa).</li>');
+    if (!r.accepting) lines.push('<li>Quán tạm ngưng nhận món.</li>');
     if (!c.table) lines.push('<li>Hãy quét mã QR trên bàn để gửi đơn.</li>');
     noteEl.innerHTML = `<div class="card" style="margin-bottom:14px"><b>Đã thêm ${r.items.length} món vào giỏ.</b><ul style="margin:6px 0 10px;padding-left:18px">${lines.join('')}</ul><a class="btn sm" href="cart.html">Đến giỏ hàng</a></div>`;
     window.scrollTo({top: 0, behavior: 'smooth'});

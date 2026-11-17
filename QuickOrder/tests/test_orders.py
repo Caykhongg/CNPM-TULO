@@ -142,10 +142,107 @@ class OrderTests(unittest.TestCase):
         self.assertEqual(resp.status_code, 400)
 
     def test_quantity_is_capped(self):
-        too_many = self.order([{"dish_id": self.dish, "quantity": 51, "option_ids": [self.opt_small]}])
+        """SRS BR-14: số lượng mỗi món từ 1 đến 99."""
+        too_many = self.order([{"dish_id": self.dish, "quantity": 100, "option_ids": [self.opt_small]}])
         self.assertEqual(too_many.status_code, 400)
-        ok = self.order([{"dish_id": self.dish, "quantity": 50, "option_ids": [self.opt_small]}])
+        zero = self.order([{"dish_id": self.dish, "quantity": 0, "option_ids": [self.opt_small]}])
+        self.assertEqual(zero.status_code, 400)
+        ok = self.order([{"dish_id": self.dish, "quantity": 99, "option_ids": [self.opt_small]}])
         self.assertEqual(ok.status_code, 201)
+
+    def test_sold_out_error_names_the_dish(self):
+        resp = self.order([{"dish_id": self.sold_out, "quantity": 1, "option_ids": []}])
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("Hết món", resp.get_json()["error"])          # tên món, không phải mã số
+        self.assertNotIn(str(self.sold_out) + " ", resp.get_json()["error"])
+
+    def test_deleted_dish_error_names_the_dish(self):
+        with self.qo.db() as c:
+            c.execute("UPDATE dishes SET is_deleted = 1 WHERE id = ?", (self.dish,))
+        resp = self.order([{"dish_id": self.dish, "quantity": 1, "option_ids": [self.opt_small]}])
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("Trà sữa", resp.get_json()["error"])
+
+    def test_closed_shop_message_is_the_single_agreed_sentence(self):
+        now = datetime.now(VN)
+        n = now.hour * 60 + now.minute
+        self.set_hours(hhmm(n + 120), hhmm(n + 180))
+        resp = self.order([{"dish_id": self.dish, "quantity": 1, "option_ids": [self.opt_small]}])
+        self.assertEqual(resp.status_code, 409)
+        self.assertEqual(resp.get_json()["error"], self.qo.SHOP_CLOSED_MSG)
+
+    # ----- BR-07: mã QR đã đổi -----
+    def test_order_with_current_qr_token_is_accepted(self):
+        resp = self.order([{"dish_id": self.dish, "quantity": 1, "option_ids": [self.opt_small]}], qr_token="tok-a-1")
+        self.assertEqual(resp.status_code, 201)
+
+    def test_order_with_old_qr_token_is_rejected_after_regenerate(self):
+        owner = self.login("a@quan.vn")
+        resp = owner.put(f"/api/tables/{self.table}", json={"regenerate": True})
+        self.assertEqual(resp.status_code, 200)
+        stale = self.order([{"dish_id": self.dish, "quantity": 1, "option_ids": [self.opt_small]}], qr_token="tok-a-1")
+        self.assertEqual(stale.status_code, 409)
+        self.assertIn("quét lại", stale.get_json()["error"])
+        with self.qo.db() as c:
+            self.assertEqual(c.execute("SELECT COUNT(*) FROM orders").fetchone()[0], 0)
+
+    def test_order_with_token_of_another_table_is_rejected(self):
+        resp = self.order([{"dish_id": self.dish, "quantity": 1, "option_ids": [self.opt_small]}], qr_token="tok-b-1")
+        self.assertEqual(resp.status_code, 409)
+
+    # ----- NFR-31: chống gửi trùng đơn -----
+    def test_same_request_id_creates_only_one_order(self):
+        item = [{"dish_id": self.dish, "quantity": 1, "option_ids": [self.opt_small]}]
+        rid = "abcdef0123456789abcdef0123456789"
+        first = self.order(item, client_request_id=rid)
+        again = self.order(item, client_request_id=rid)
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(again.status_code, 200)
+        self.assertTrue(again.get_json()["duplicate"])
+        self.assertEqual(again.get_json()["id"], first.get_json()["id"])
+        # gửi lại vẫn nhận đúng mã riêng cũ, mã này xem được đơn
+        self.assertEqual(again.get_json()["access_token"], first.get_json()["access_token"])
+        view = self.guest.get(f"/api/orders/{first.get_json()['id']}?token={again.get_json()['access_token']}")
+        self.assertEqual(view.status_code, 200)
+        with self.qo.db() as c:
+            self.assertEqual(c.execute("SELECT COUNT(*) FROM orders").fetchone()[0], 1)
+
+    def test_duplicate_request_does_not_use_up_a_coupon_twice(self):
+        with self.qo.db() as c:
+            c.execute("INSERT INTO coupons(shop_id, code, discount_type, discount_value, max_uses) VALUES (?, 'ONCE', 'AMOUNT', 1000, 1)", (self.shop,))
+        item = [{"dish_id": self.dish, "quantity": 1, "option_ids": [self.opt_small]}]
+        rid = "0123456789abcdef0123456789abcdef"
+        self.assertEqual(self.order(item, client_request_id=rid, coupon_code="ONCE").status_code, 201)
+        self.assertEqual(self.order(item, client_request_id=rid, coupon_code="ONCE").status_code, 200)
+        with self.qo.db() as c:
+            self.assertEqual(c.execute("SELECT used_count FROM coupons WHERE code = 'ONCE'").fetchone()[0], 1)
+
+    def test_different_request_ids_create_different_orders(self):
+        item = [{"dish_id": self.dish, "quantity": 1, "option_ids": [self.opt_small]}]
+        a = self.order(item, client_request_id="a" * 20)
+        b = self.order(item, client_request_id="b" * 20)
+        self.assertEqual((a.status_code, b.status_code), (201, 201))
+        self.assertNotEqual(a.get_json()["id"], b.get_json()["id"])
+        self.assertNotEqual(a.get_json()["access_token"], b.get_json()["access_token"])
+
+    def test_request_id_cannot_be_reused_for_another_shop(self):
+        item = [{"dish_id": self.dish, "quantity": 1, "option_ids": [self.opt_small]}]
+        rid = "c" * 24
+        self.assertEqual(self.order(item, client_request_id=rid).status_code, 201)
+        other = self.guest.post("/api/orders", json={
+            "shop_id": self.other_shop, "table_id": self.other_table, "client_request_id": rid,
+            "items": [{"dish_id": self.other_dish, "quantity": 1, "option_ids": []}]})
+        self.assertEqual(other.status_code, 409)
+
+    def test_malformed_request_id_is_rejected(self):
+        item = [{"dish_id": self.dish, "quantity": 1, "option_ids": [self.opt_small]}]
+        for bad in ("short", "x" * 65, "có dấu cách và ký tự lạ !!!!!", 12345678901234567890):
+            self.assertEqual(self.order(item, client_request_id=bad).status_code, 400, bad)
+
+    def test_order_without_request_id_still_works_and_is_never_deduplicated(self):
+        item = [{"dish_id": self.dish, "quantity": 1, "option_ids": [self.opt_small]}]
+        a, b = self.order(item), self.order(item)
+        self.assertNotEqual(a.get_json()["id"], b.get_json()["id"])
 
     def test_order_rejected_outside_opening_hours(self):
         now = datetime.now(VN)
@@ -407,6 +504,10 @@ class OldOrderTableTests(unittest.TestCase):
             cols = [r["name"] for r in c.execute("PRAGMA table_info(orders)")]
         self.assertIn("access_hash", cols)
         self.assertIn("cancel_reason", cols)
+        self.assertIn("request_id", cols)             # NFR-31: cột chống gửi trùng cũng được bổ sung
+        with qo.db() as c:
+            indexes = {r["name"] for r in c.execute("PRAGMA index_list(orders)")}
+        self.assertIn("idx_orders_request", indexes)
 
 
 if __name__ == "__main__":

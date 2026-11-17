@@ -37,6 +37,8 @@ const QO = (() => {
   const toast = m => { let t = document.getElementById('toast'); if (!t) { t = document.createElement('div'); t.id = 'toast'; document.body.appendChild(t); }
     t.textContent = m; t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 2200); };
   const param = k => new URLSearchParams(location.search).get(k);
+  // Mã ngẫu nhiên 32 ký tự gửi kèm đơn để máy chủ không tạo đơn thứ hai khi gửi lại cùng một lần đặt (NFR-31)
+  const newRequestId = () => { const b = new Uint8Array(16); crypto.getRandomValues(b); return [...b].map(x => x.toString(16).padStart(2, '0')).join(''); };
   // created_at do server ghi theo giờ UTC dạng "YYYY-MM-DD HH:MM:SS"
   const parseTime = s => new Date(String(s).replace(' ', 'T') + 'Z');
   // Nhãn bàn: thêm chữ "Bàn" nếu tên chưa có (chủ quán có thể đặt tên "5" hoặc "Bàn 5")
@@ -171,6 +173,6 @@ const QO = (() => {
   };
 
   return {api, all, get, by, put, del, isOpenNow, isAccepting, isOrderable, validateSelection, qrUrl, STATUS, ORDER_STATUS, PAY_METHOD,
-    esc, money, norm, hash, toast, param, parseTime, fmtTime, tableLabel, session, logout, requireOwner, myShop, getCart, setCart, getGuest, setGuest, clearGuest,
+    esc, money, norm, hash, toast, param, newRequestId, parseTime, fmtTime, tableLabel, session, logout, requireOwner, myShop, getCart, setCart, getGuest, setGuest, clearGuest,
     getOrders, saveOrders, addOrder, orderTrackingUrl, complaintDialog, COMPLAINT_STATUS, header};
 })();

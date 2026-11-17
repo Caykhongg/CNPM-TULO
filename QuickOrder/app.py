@@ -156,6 +156,10 @@ def init_db():
         if "user_id" not in have:
             c.execute("ALTER TABLE orders ADD COLUMN user_id INTEGER REFERENCES users(id) ON UPDATE CASCADE ON DELETE SET NULL")
         c.execute("CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id, id)")
+        # NFR-31: mã chống gửi trùng đơn. Mỗi mã chỉ tạo được một đơn (NULL không bị tính trùng).
+        if "request_id" not in have:
+            c.execute("ALTER TABLE orders ADD COLUMN request_id TEXT")
+        c.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_request ON orders(request_id)")
         # FR-22: lưu id tùy chọn của từng dòng món để đặt lại đúng size/topping
         if "option_ids" not in columns(c, "order_items"):
             c.execute("ALTER TABLE order_items ADD COLUMN option_ids TEXT NOT NULL DEFAULT ''")
@@ -789,7 +793,9 @@ NEXT_STATUS = {
     "CONFIRMED": ("PREPARING", "COMPLETED", "CANCELLED"),
     "PREPARING": ("COMPLETED", "CANCELLED"),
 }
-MAX_QTY = 50                # tối đa mỗi dòng món
+MAX_QTY = 99                # tối đa mỗi dòng món (SRS BR-14: từ 1 đến 99)
+SHOP_CLOSED_MSG = "Quán tạm ngưng nhận món."          # một câu duy nhất cho mọi trường hợp quán không nhận đơn (SRS BR-06)
+REQUEST_ID_RE = re.compile(r"[A-Za-z0-9_-]{16,64}")
 MAX_LINES = 50              # tối đa số dòng món trong một đơn
 MAX_NOTE = 500
 MAX_ITEM_NOTE = 200
@@ -914,11 +920,14 @@ def price_item(c, shop_id, item):
     if len(note) > MAX_ITEM_NOTE:
         return None, f"Ghi chú món tối đa {MAX_ITEM_NOTE} ký tự."
 
-    dish = c.execute(
-        "SELECT id, name, price FROM dishes WHERE id = ? AND shop_id = ? AND is_deleted = 0 AND is_available = 1",
-        (dish_id, shop_id)).fetchone()
+    dish = c.execute("SELECT id, name, price, is_available, is_deleted FROM dishes WHERE id = ? AND shop_id = ?",
+                     (dish_id, shop_id)).fetchone()
     if not dish:
-        return None, f"Món {dish_id} không tồn tại hoặc đã hết món."
+        return None, "Có món trong giỏ không còn trong thực đơn của quán. Vui lòng bỏ món đó khỏi giỏ."
+    if dish["is_deleted"]:
+        return None, f'Món "{dish["name"]}" đã ngừng bán. Vui lòng bỏ món đó khỏi giỏ.'
+    if not dish["is_available"]:
+        return None, f'Món "{dish["name"]}" vừa hết. Vui lòng bỏ món đó khỏi giỏ.'
     groups = c.execute("SELECT id, name, is_required, is_multiple FROM option_groups WHERE dish_id = ? ORDER BY id",
                        (dish_id,)).fetchall()
     options = {r["id"]: r for r in c.execute(
@@ -979,6 +988,23 @@ def quote_order():
                    coupon_code=cp["code"] if cp else "")
 
 
+def request_token(request_id):
+    """Mã riêng của đơn sinh từ client_request_id: chỉ ai giữ mã gửi đơn (ngẫu nhiên, nằm ở trình duyệt) mới tính ra được."""
+    key = app.secret_key.encode("utf-8") if isinstance(app.secret_key, str) else app.secret_key
+    return hmac.new(key, b"order-token:" + request_id.encode("utf-8"), hashlib.sha256).hexdigest()[:48]
+
+
+def duplicate_order(c, existing, shop_id, request_id):
+    """Gửi lại đúng yêu cầu đã tạo đơn (bấm đúp, mạng chập chờn): không tạo đơn thứ hai, trả lại đơn cũ với mã riêng cũ."""
+    if existing["shop_id"] != shop_id:
+        return jsonify(error="client_request_id đã được dùng cho đơn khác."), 409
+    result = order_json(c, existing["id"])
+    result["access_token"] = request_token(request_id)
+    result["in_my_history"] = existing["user_id"] is not None
+    result["duplicate"] = True
+    return jsonify(result), 200
+
+
 @app.post("/api/orders")
 def create_order():
     d = json_body()
@@ -1004,16 +1030,31 @@ def create_order():
     note = text(d, "note")
     if len(customer) > 100 or len(note) > MAX_NOTE:
         return jsonify(error="Họ tên hoặc ghi chú quá dài."), 400
+    # Mã chống gửi trùng (NFR-31): do trình duyệt sinh cho mỗi lần gửi. Cùng mã gửi lại thì trả lại đúng đơn đã tạo.
+    request_id = d.get("client_request_id")
+    if request_id is not None and not (isinstance(request_id, str) and REQUEST_ID_RE.fullmatch(request_id)):
+        return jsonify(error="client_request_id không hợp lệ."), 400
+    qr_token = d.get("qr_token")
+    if qr_token is not None and not isinstance(qr_token, str):
+        return jsonify(error="qr_token không hợp lệ."), 400
 
     with db() as c:
+        if request_id:
+            same = c.execute("SELECT id, shop_id, user_id FROM orders WHERE request_id = ?", (request_id,)).fetchone()
+            if same:
+                return duplicate_order(c, same, shop_id, request_id)
         shop = c.execute("SELECT id, open_time, close_time FROM shops WHERE id = ? AND status = 'APPROVED'",
                          (shop_id,)).fetchone()
         if not shop:
             return jsonify(error="Quán không tồn tại hoặc chưa được duyệt."), 404
         if not is_open_now(shop):
-            return jsonify(error="Quán hiện không nhận đơn (ngoài giờ mở cửa)."), 409
-        if not c.execute("SELECT 1 FROM shop_tables WHERE id = ? AND shop_id = ?", (table_id, shop_id)).fetchone():
+            return jsonify(error=SHOP_CLOSED_MSG), 409
+        table = c.execute("SELECT qr_token FROM shop_tables WHERE id = ? AND shop_id = ?", (table_id, shop_id)).fetchone()
+        if not table:
             return jsonify(error="Bàn không thuộc quán này."), 400
+        # BR-07: mã QR đã đổi thì trang mở từ mã cũ không đặt được nữa
+        if qr_token is not None and not hmac.compare_digest(table["qr_token"], qr_token):
+            return jsonify(error="Mã QR của bàn đã được đổi. Hãy quét lại mã QR trên bàn."), 409
 
         lines, subtotal, err = price_lines(c, shop_id, items)
         if err:
@@ -1031,14 +1072,23 @@ def create_order():
                 return jsonify(error="Mã giảm giá đã hết lượt dùng."), 400
         total = subtotal - discount                    # BR-13: tổng tiền sau giảm giá
 
-        token = secrets.token_urlsafe(24)              # chỉ trả về một lần; server chỉ giữ băm
+        # Mã riêng của đơn: server chỉ giữ băm. Có client_request_id thì mã sinh từ đó, để gửi lại cùng mã vẫn trả đúng mã cũ.
+        token = request_token(request_id) if request_id else secrets.token_urlsafe(24)
         u = current_user()
         user_id = u["id"] if u and u["role"] == "customer" else None   # khách đã đăng nhập thì đơn vào lịch sử (FR-21)
-        order_id = c.execute(
-            "INSERT INTO orders (shop_id, table_id, customer_name, payment_method, total_amount, note, access_hash, "
-            "coupon_code, discount_amount, user_id) VALUES (?,?,?,?,?,?,?,?,?,?)",
-            (shop_id, table_id, customer, payment_method, total, note, token_hash(token),
-             cp["code"] if cp else "", discount, user_id)).lastrowid
+        try:
+            order_id = c.execute(
+                "INSERT INTO orders (shop_id, table_id, customer_name, payment_method, total_amount, note, access_hash, "
+                "coupon_code, discount_amount, user_id, request_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                (shop_id, table_id, customer, payment_method, total, note, token_hash(token),
+                 cp["code"] if cp else "", discount, user_id, request_id)).lastrowid
+        except sqlite3.IntegrityError:
+            # Hai yêu cầu cùng mã đến cùng lúc: yêu cầu đến sau hủy phần mình (kể cả lượt mã giảm giá đã giữ) và trả đơn đã có.
+            c.rollback()
+            same = c.execute("SELECT id, shop_id, user_id FROM orders WHERE request_id = ?", (request_id,)).fetchone() if request_id else None
+            if not same:
+                raise
+            return duplicate_order(c, same, shop_id, request_id)
         for dish_id, qty, unit, line_note, opt_ids, snap in lines:
             item_id = c.execute(
                 "INSERT INTO order_items (order_id, dish_id, quantity, unit_price, note, option_ids) VALUES (?,?,?,?,?,?)",
@@ -1574,7 +1624,7 @@ def reorder(id):
         order = my_order(c, id, u)
         shop = c.execute("SELECT id, name, open_time, close_time, status FROM shops WHERE id = ?", (order["shop_id"],)).fetchone()
         if not shop or shop["status"] != "APPROVED":
-            return jsonify(error="Quán hiện không nhận đơn."), 409
+            return jsonify(error=SHOP_CLOSED_MSG), 409
         rows = c.execute("SELECT oi.*, d.name AS dish_name, d.price AS dish_price FROM order_items oi "
                          "JOIN dishes d ON d.id = oi.dish_id WHERE oi.order_id = ? ORDER BY oi.id", (id,)).fetchall()
         items, skipped = [], []

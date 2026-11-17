@@ -30,7 +30,8 @@ function environment(page = 'orders.html', search = '', hash = '') {
     getItem: key => data.get(key) ?? null,
     setItem: (key, value) => { if (env.blocked) throw Error('Storage blocked'); data.set(key, value); },
   };
-  const utils = vm.runInNewContext(read('js/app.js') + '\nQO;', {document, location, localStorage, URL, URLSearchParams, console});
+  const utils = vm.runInNewContext(read('js/app.js') + '\nQO;', {document, location, localStorage, URL, URLSearchParams, console,
+    crypto: require('node:crypto').webcrypto});
   const QO = {...utils, header() {}, toast: message => env.toasts.push(message)};
   env.QO = QO;
   env.context = {QO, document, location, URL, URLSearchParams, console, confirm: () => true,
@@ -42,26 +43,28 @@ function environment(page = 'orders.html', search = '', hash = '') {
   return env;
 }
 
-async function cartFixture({failure = false, table = true, accepting = true, blocked = false, deferred = false} = {}) {
+async function cartFixture({failure = false, table = true, accepting = true, blocked = false, deferred = false, failWith = null} = {}) {
   const e = environment('cart.html');
   e.blocked = blocked;
   let cart = {shop_id: 7, table: table ? 'qr-test' : null,
     items: [{key: '4:', dish_id: 4, name: 'Phở', price: 40000, qty: 1, options: []}]};
   let posted = 0, resolve;
+  const bodies = [];
   const shop = {id: 7, name: 'Quán thử', status: 'APPROVED'};
   Object.assign(e.QO, {getCart: () => cart, setCart: c => { cart = c; },
     getGuest: () => null, session: async () => null, all: async () => [], get: async () => shop,
     isAccepting: () => accepting,
     api: async (method, url, body) => {
       if (method === 'GET') return {shop, table: {id: 9, table_number: '1'}};
-      assert.equal(url, 'orders'); assert.equal(body.table_id, 9); posted++;
+      assert.equal(url, 'orders'); assert.equal(body.table_id, 9); posted++; bodies.push(body);
+      if (failWith) throw failWith();
       if (failure) throw Error('Gửi đơn thất bại');
       if (deferred) return new Promise(r => { resolve = r; });
       return {id: 1, shop_id: 7, access_token: 'order-proof'};
     },
   });
   await e.run(inline('customer/cart.html'));
-  return Object.assign(e, {cart: () => cart, posted: () => posted,
+  return Object.assign(e, {cart: () => cart, posted: () => posted, bodies,
     finish: () => resolve({id: 1, shop_id: 7, access_token: 'order-proof'})});
 }
 
@@ -86,6 +89,21 @@ test('Bấm nhanh hai lần chỉ tạo một yêu cầu đặt đơn', async ()
   const first = e.get('order').onclick();
   await e.get('order').onclick(); assert.equal(e.posted(), 1);
   e.finish(); await first;
+});
+
+test('Đơn gửi kèm mã QR của bàn và mã chống gửi trùng', async () => {
+  const e = await cartFixture(); await e.get('order').onclick();
+  assert.equal(e.bodies[0].qr_token, 'qr-test');
+  assert.match(e.bodies[0].client_request_id, /^[0-9a-f]{32}$/);
+});
+
+test('Lỗi mạng: gửi lại dùng đúng mã cũ; server báo lỗi: đổi mã mới', async () => {
+  const net = await cartFixture({failWith: () => new TypeError('Failed to fetch')});
+  await net.get('order').onclick(); await net.get('order').onclick();
+  assert.equal(net.bodies[0].client_request_id, net.bodies[1].client_request_id);
+  const api = await cartFixture({failWith: () => Object.assign(Error('Món vừa hết'), {name: 'ApiError'})});
+  await api.get('order').onclick(); await api.get('order').onclick();
+  assert.notEqual(api.bodies[0].client_request_id, api.bodies[1].client_request_id);
 });
 
 test('Thiếu bàn hoặc quán đóng cửa: khóa nút và chặn cả lời gọi chương trình', async () => {

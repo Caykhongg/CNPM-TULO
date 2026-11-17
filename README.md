@@ -6,7 +6,7 @@
 ![Python](https://img.shields.io/badge/Python-3.10+-blue)
 ![Flask](https://img.shields.io/badge/Flask-3.x-lightgrey)
 ![SQLite](https://img.shields.io/badge/SQLite-3-green)
-![Status](https://img.shields.io/badge/Status-Hoàn%20thành%20Sprint%203-brightgreen)
+![Status](https://img.shields.io/badge/Status-Hoàn%20thành%20Sprint%204-brightgreen)
 
 ---
 
@@ -160,8 +160,8 @@ CNPM-TULO/
 │   ├── merchant/                # Giao diện chủ quán: tổng quan, thông tin quán, menu, bàn và QR, đơn hàng, tính tiền theo bàn, mã giảm giá, đánh giá, khiếu nại, doanh thu
 │   ├── admin/                   # Giao diện quản trị: duyệt và khóa quán, người dùng, danh mục, thống kê
 │   ├── css/, js/                # Giao diện dùng chung, hàm gọi API (js/app.js, js/admin.js) và thư viện qrcode (js/vendor)
-│   └── tests/                   # Kiểm thử tự động (unittest, 152 test)
-├── docs/                        # Tài liệu dự án (SRS, Use Case, thiết kế, Route/API, danh sách chức năng...)
+│   └── tests/                   # Kiểm thử tự động (unittest 199 test, Node 14 test)
+├── docs/                        # Tài liệu dự án (SRS, Use Case, thiết kế, Route/API Sprint 4, danh sách chức năng...)
 ├── QuickOrder_TestCases_Sprint1.docx
 ├── QuickOrder_TestCases_Sprint2.docx
 ├── sequence_diagram.md          # Sơ đồ tuần tự luồng đặt món và xử lý đơn (Mermaid)
@@ -255,21 +255,24 @@ Chạy trong thư mục `QuickOrder/` (không cần cài thêm thư viện ngoà
 ```bash
 python -m unittest discover -s tests -v
 ```
-(`pytest` cũng chạy được các test này.) Kiểm thử dùng CSDL và thư mục ảnh tạm, không gửi email thật.
+(`pytest` cũng chạy được các test này.) Kiểm thử dùng CSDL và thư mục ảnh tạm, không gửi email thật. Nếu máy có Node.js, chạy thêm kiểm thử logic trang giỏ hàng, theo dõi đơn: `node --test tests/test_customer_order_pages.cjs` (không cần cài package).
 
-Kết quả lần chạy cuối (kết thúc Sprint 3): **152 test, tất cả đạt**.
+Kết quả lần chạy cuối (kết thúc Sprint 4): **199 test Python và 14 test Node, tất cả đạt**.
 
 | File test | Nội dung | Số test |
 |---|---|---|
 | `test_customer.py` | Đăng ký khách có xác nhận email, hồ sơ khách | 23 |
 | `test_mailer.py` | Gửi email xác nhận qua Brevo | 17 |
-| `test_orders.py` | Gửi đơn, trạng thái đơn, hủy đơn, thanh toán | 30 |
+| `test_orders.py` | Gửi đơn, trạng thái đơn, hủy đơn, thanh toán; giới hạn số lượng 1 đến 99; mã QR đã đổi bị từ chối; chống gửi trùng đơn; nâng cấp CSDL cũ | 50 |
 | `test_sprint2_extras.py`, `test_sprint2_review.py` | Bổ sung và rà soát Sprint 2 (ảnh QR thanh toán, giờ mở cửa...) | 9 |
 | `test_revenue.py` | Thống kê doanh thu và món bán chạy (FR-47, FR-48) | 9 |
 | `test_sprint3.py` | Mã giảm giá, tính tiền theo bàn, đánh giá (FR-23, FR-24, FR-45, FR-46, FR-49) | 18 |
 | `test_customer_utilities.py` | Lịch sử đơn, đặt lại món, gợi ý món, khiếu nại của khách (FR-21, FR-22, FR-25, FR-26) | 23 |
 | `test_order_history_complaints.py` | Lưu đơn vào lịch sử, khiếu nại do chủ quán xử lý (FR-55) | 14 |
 | `test_admin.py` | Khóa/mở khóa quán, người dùng, danh mục, thống kê (FR-51 đến FR-54) | 9 |
+| `test_categories.py` | Danh mục dùng chung và danh mục riêng của quán | 19 |
+| `test_customer_tracking.py` | Theo dõi đơn và danh sách đơn của khách | 8 |
+| `test_customer_order_pages.cjs` (Node) | Giỏ hàng, theo dõi đơn, danh sách đơn phía trình duyệt; mã chống gửi trùng | 14 |
 
 ### Kiểm tra nhanh các chức năng Sprint 3
 
@@ -286,7 +289,7 @@ Sau khi chạy `python seed_data.py --reset` và mở ứng dụng, có thể th
 - **Khiếu nại (FR-26, FR-55):** khách gửi khiếu nại (10 đến 500 ký tự) cho đơn không còn ở trạng thái chờ xác nhận (đơn đang chờ thì hủy đơn thay vì khiếu nại). Chủ quán mở **Chủ quán → Khiếu nại**: xem, lọc trạng thái, phản hồi rồi đóng. Chủ quán khác không đọc hoặc sửa được khiếu nại của quán này. Khách xem phản hồi ở hộp thoại khiếu nại của đơn.
 - **Quản trị viên (FR-51 đến FR-54):** đăng nhập tại `/admin/shops.html` (`admin@quickorder.vn`). Các trang: **Quản lý quán** (duyệt, từ chối, khóa, mở khóa), **Người dùng** (`/admin/users.html`), **Danh mục** (`/admin/categories.html`), **Thống kê** (`/admin/dashboard.html`).
 
-**Nâng cấp CSDL đã có dữ liệu:** `init_db()` tự thêm các cột và bảng mới khi khởi động (mã giảm giá, đánh giá, khiếu nại, `user_id` của đơn, `owner_reply`...), và sao chép phản hồi cũ từ `admin_reply` sang `owner_reply` một lần. Không xóa đơn, khiếu nại hoặc phản hồi hiện có. Hãy sao lưu `database.db` trước khi triển khai bản mới.
+**Nâng cấp CSDL đã có dữ liệu:** `init_db()` tự thêm các cột và bảng mới khi khởi động (mã giảm giá, đánh giá, khiếu nại, `user_id` và `request_id` của đơn, `owner_reply`...), và sao chép phản hồi cũ từ `admin_reply` sang `owner_reply` một lần. Không xóa đơn, khiếu nại hoặc phản hồi hiện có. Hãy sao lưu `database.db` trước khi triển khai bản mới.
 
 ### Gửi email xác nhận khi khách đăng ký
 Khách đăng ký tài khoản sẽ nhận mã 6 số qua email. Đặt các biến môi trường sau trên máy chủ (Render: tab **Environment**), cùng với các biến ở mục trên:
@@ -332,6 +335,13 @@ Giao diện là các trang HTML tĩnh gọi API JSON dưới tiền tố `/api` 
 | Khiếu nại *(Sprint 3)* | Khách: `POST, GET /api/orders/<id>/complaints`, `GET /api/my/complaints`; chủ quán: `GET /api/merchant/complaints`, `PUT /api/merchant/complaints/<id>/reply`, `PUT /api/merchant/complaints/<id>/close` | Khách; chủ quán |
 | Quản trị *(Sprint 3)* | `GET /api/admin/users`, `PUT /api/admin/users/<id>/status`, `GET /api/admin/statistics`; khóa/mở khóa quán qua `PUT /api/shops/<id>` (trường `status`) | Admin |
 
+Khi gửi đơn (`POST /api/orders`), trình duyệt gửi kèm hai trường:
+
+- `qr_token`: mã QR của bàn. Nếu có, phải khớp mã hiện tại của bàn; quán đã đổi mã thì máy chủ trả 409 và khách phải quét lại (BR-07).
+- `client_request_id`: mã ngẫu nhiên (16 đến 64 ký tự) cho mỗi lần đặt. Gửi lại cùng mã (bấm đúp, mạng chập chờn) không tạo đơn thứ hai: máy chủ trả lại đơn đã có kèm đúng mã riêng cũ, và không trừ thêm lượt mã giảm giá (NFR-31).
+
+Số lượng mỗi món từ 1 đến 99 (BR-14). Mọi trường hợp quán không nhận đơn dùng một thông báo: "Quán tạm ngưng nhận món." (BR-06). Hợp đồng API chi tiết của đơn hàng ở [docs/API_QuickOrder_Sprint4.md](docs/API_QuickOrder_Sprint4.md).
+
 ## 📚 Tài liệu dự án
 
 Toàn bộ tài liệu nằm trong thư mục [`docs/`](./docs).
@@ -342,12 +352,15 @@ Toàn bộ tài liệu nằm trong thư mục [`docs/`](./docs).
 | Đặc tả yêu cầu phần mềm (SRS) | ✅ Bản 1.0, hoàn thành Sprint 0–1 ([xem file](docs/SRS_QuickOrder_v1.0.docx)) |
 | Use Case | ✅ Bản 1.0, hoàn thành Sprint 0–1 ([xem file](docs/UseCase_QuickOrder_v1.0.docx)) |
 | User Story | ✅ Cập nhật sau Sprint 3: 50/51 story đã Hoàn thành; còn US-24 (thanh toán trực tuyến, Mở rộng), bản 0.1 ([xem file](docs/UserStory_QuickOrder_v0.1.xlsx)) |
-| Thiết kế CSDL (ERD) | ⬜ Chưa làm |
+| Thiết kế CSDL (ERD) | ✅ Sơ đồ Mermaid theo `schema.sql` hiện tại, kèm quy ước ràng buộc ([xem file](https://github.com/Caykhongg/CNPM-TULO/blob/NguyenXuanAnh27-patch-1/docs/ERD_QuickOrder.md), nhánh `NguyenXuanAnh27-patch-1`) |
 | Class Diagram | ✅ Bản 1.0, hoàn thành Sprint 0–1 ([xem file](docs/ClassDiagram_QuickOrder_v1.0.docx)) |
 | Sequence Diagram | ✅ Bản 1.0, 9 luồng chính ([xem file](docs/SequenceDiagram_QuickOrder_v1.0.docx)); luồng đặt món theo API thực tế ở [sequence_diagram.md](sequence_diagram.md) |
 | Wireframe (Figma) | 🔄 Đã có bản phác thảo 10 màn hình ([xem file](docs/Wireframe_QuickOrder_v1.0.docx)); chờ dựng trên Figma, thêm liên kết Figma khi xong |
+| Hợp đồng API đơn hàng (Sprint 4) | ✅ Mô tả đúng những gì code làm; 5 chỗ lệch với SRS đã sửa trong code ([xem file](docs/API_QuickOrder_Sprint4.md)) |
+| Báo cáo đo hiệu năng | ✅ Đo 8 và 24 bàn cùng lúc: 0 lỗi, không mất đơn, yêu cầu chậm nhất 412 ms ([xem file](https://github.com/Caykhongg/CNPM-TULO/blob/NguyenXuanAnh27-patch-1/docs/perf/Do_hieu_nang_QuickOrder.md), nhánh `NguyenXuanAnh27-patch-1`). Đo ở máy chủ qua localhost, chưa gồm độ trễ mạng của điện thoại |
+| Hướng dẫn sử dụng | ✅ Cho khách, chủ quán, quản trị viên ([xem file](https://github.com/Caykhongg/CNPM-TULO/blob/NguyenXuanAnh27-patch-1/docs/Huong_dan_su_dung_QuickOrder.md), nhánh `NguyenXuanAnh27-patch-1`) |
 | Cấu trúc Route/API | ✅ Bản 1.1 sau Sprint 3: giữ thiết kế ban đầu (mục 1 đến 8) và thêm mục 9 liệt kê API đã triển khai ([xem file](docs/RouteAPI_QuickOrder_v1.0.docx)) |
-| Test case và báo cáo kiểm thử | 🔄 Đã có test case [Sprint 1](QuickOrder_TestCases_Sprint1.docx) và [Sprint 2](QuickOrder_TestCases_Sprint2.docx); Sprint 2: 16 ca Đạt, 2 ca không áp dụng (TC-073, TC-074: hệ thống không có trang tìm quán). Sprint 3: 152 test tự động đều đạt (xem mục [Chạy kiểm thử](#chạy-kiểm-thử)); bộ test case thủ công Sprint 3 và báo cáo kiểm thử chưa làm, thực hiện ở Sprint 4. Test tự động nằm trong `QuickOrder/tests` |
+| Test case và báo cáo kiểm thử | 🔄 Đã có test case [Sprint 1](QuickOrder_TestCases_Sprint1.docx) và [Sprint 2](QuickOrder_TestCases_Sprint2.docx); Sprint 2: 16 ca Đạt, 2 ca không áp dụng (TC-073, TC-074: hệ thống không có trang tìm quán). Sprint 4: 199 test Python và 14 test Node tự động đều đạt (xem mục [Chạy kiểm thử](#chạy-kiểm-thử)); **chưa có** bộ test case thủ công Sprint 3 và báo cáo kiểm thử. Test tự động nằm trong `QuickOrder/tests` |
 
 ## 🤝 Quy trình làm việc nhóm
 
@@ -380,8 +393,8 @@ refactor: tách hàm tính giá
 | 4–5 | ✅ **Sprint 1** | Nền tảng, menu và QR bàn: đăng ký/đăng nhập, phân quyền, quản lý quán, menu, bàn và mã QR, quét QR xem menu |
 | 6–7 | ✅ **Sprint 2** | Gọi món và xử lý đơn: giỏ hàng, gửi đơn, thanh toán, thông báo đơn mới, cập nhật trạng thái |
 | 8 | ✅ **Sprint 3** | Tính năng nâng cao, hoàn thành 16 chức năng và nâng tổng lên 48/49 chức năng của cả dự án. **Chủ quán:** mã giảm giá (FR-46), tính tiền theo bàn (FR-45), xem đánh giá (FR-49), thống kê doanh thu và món bán chạy (FR-47, FR-48), xử lý khiếu nại thuộc quán mình (FR-55). **Khách:** áp dụng mã giảm giá (FR-23), đánh giá quán và món (FR-24), lịch sử đơn (FR-21), đặt lại món (FR-22), gợi ý món (FR-25), gửi khiếu nại (FR-26). **Quản trị viên:** khóa/mở khóa quán (FR-51), quản lý người dùng (FR-52), quản lý danh mục (FR-53), thống kê toàn hệ thống (FR-54). Còn lại FR-27 (thanh toán trực tuyến) thuộc phần Mở rộng, ngoài kế hoạch |
-| 9 | 🔄 **Sprint 4** | Kiểm thử tổng thể (test case thủ công và báo cáo kiểm thử Sprint 3), đo hiệu năng, sửa lỗi |
-| 10 | Hoàn thiện | Deploy, tài liệu hướng dẫn, báo cáo, slide, demo |
+| 9 | ✅ **Sprint 4** | Kiểm thử, đo hiệu năng và sửa lỗi. **Đã làm:** sửa 5 chỗ lệch giữa SRS và code (số lượng mỗi món 1 đến 99, chống gửi trùng đơn ở máy chủ, đơn gửi kèm mã QR bàn để mã đã đổi không đặt được, một thông báo thống nhất khi quán không nhận đơn, báo tên món khi món vừa hết); hợp đồng API đơn hàng; theo dõi đơn của khách; ảnh chụp tùy chọn lúc đặt; đo hiệu năng 8 và 24 bàn; test tăng lên 199 Python và 14 Node; dọn thư mục `QuickOrder/QuickOrder` cũ và gỡ `database.db` khỏi git. **Chưa làm:** bộ test case thủ công Sprint 3 và báo cáo kiểm thử |
+| 10 | 🔄 **Sprint 5 (Hoàn thiện)** | **Đã có:** README, kịch bản demo ([docs/Kich_ban_demo_QuickOrder.md](docs/Kich_ban_demo_QuickOrder.md)), hướng dẫn sử dụng, ERD. **Còn lại:** deploy và điền link demo, dựng Figma và thêm link, báo cáo, slide |
 
 ## Đặt và theo dõi đơn của khách
 

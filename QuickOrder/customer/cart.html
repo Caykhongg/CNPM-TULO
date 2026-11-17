@@ -34,7 +34,7 @@ QO.header('customer');
   const whereEl = document.getElementById('where'), errEl = document.getElementById('err'), orderBtn = document.getElementById('order');
   const nameEl = document.querySelector('input[name="name"]'), noteEl = document.querySelector('textarea[name="note"]');
   const PAYS = [['CASH', 'Tiền mặt'], ['TRANSFER', 'Chuyển khoản / QR']];
-  let shop = null, tb = null, method = 'CASH', sending = false;
+  let shop = null, tb = null, method = 'CASH', sending = false, requestId = '';
   let coupon = '', quote = null;                    // mã đang áp dụng và kết quả tính thử của server (giảm giá do server tính)
   const cpEl = document.getElementById('cp'), cpMsg = document.getElementById('cpmsg'), cpBtn = document.getElementById('cpok');
   let groups = [], opts = [], editing = null;       // nhóm và tùy chọn của các món trong giỏ, để sửa tùy chọn
@@ -122,7 +122,7 @@ QO.header('customer');
 
     const accepting = !!shop && QO.isAccepting(shop);
     orderBtn.disabled = sending || !tb || !accepting;
-    orderBtn.textContent = sending ? 'Đang gửi...' : (shop && !accepting ? 'Quán hiện không nhận đơn' : 'Đặt hàng');
+    orderBtn.textContent = sending ? 'Đang gửi...' : (shop && !accepting ? 'Quán tạm ngưng nhận món' : 'Đặt hàng');
   };
 
   box.onclick = e => {
@@ -170,10 +170,14 @@ QO.header('customer');
     if (!c.items.length || !tb || !shop || !QO.isAccepting(shop)) return;
     sending = true; draw();
     let order;
+    // Mã chống gửi trùng: giữ nguyên khi lỗi mạng (gửi lại không tạo đơn thứ hai), đổi mới khi server đã trả lời lỗi.
+    if (!requestId) requestId = QO.newRequestId();
     try {
       order = await QO.api('POST', 'orders', {
         shop_id: c.shop_id,
         table_id: tb.id,
+        qr_token: c.table,                        // mã QR đã đổi thì server từ chối (BR-07)
+        client_request_id: requestId,
         customer_name: (nameEl.value || '').trim() || 'Khách tại bàn',
         payment_method: method,
         note: noteEl.value.trim(),
@@ -182,9 +186,11 @@ QO.header('customer');
       });
     } catch (e) {
       errEl.textContent = e.message;
+      if (e.name !== 'TypeError') requestId = '';     // server đã trả lời (đơn không tạo): lần gửi sau dùng mã mới
       sending = false; draw();
       return;
     }
+    requestId = '';
     // Tách lỗi lưu trên thiết bị khỏi lỗi gửi đơn: đơn đã tạo thì chuyển tới theo dõi.
     const saved = QO.addOrder({id: order.id, token: order.access_token, shop_id: order.shop_id, shop_name: shop.name, table_number: tb.table_number});
     try { QO.setCart({shop_id: null, table: null, items: []}); } catch {}

@@ -22,7 +22,7 @@ QO.header('customer');
   const accepting = QO.isAccepting(shop);
   let q = QO.param('q') || '', cat = 0, cur = null;
 
-  const [label, tone] = accepting ? ['Đang nhận đơn', 'ok'] : ['Hiện không nhận đơn', 'no'];
+  const [label, tone] = accepting ? ['Đang nhận món', 'ok'] : ['Quán tạm ngưng nhận món', 'no'];
   root.innerHTML = `
     <section class="card shop-head" style="margin-top:8px">
       <div class="row">

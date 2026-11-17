@@ -116,6 +116,7 @@ CREATE TABLE IF NOT EXISTS orders (
     discount_amount INTEGER NOT NULL DEFAULT 0,    -- số tiền đã giảm; total_amount là số tiền khách phải trả sau giảm
     note TEXT NOT NULL DEFAULT '',
     user_id INTEGER,                               -- tài khoản khách đã đăng nhập lúc gửi đơn (NULL nếu khách ẩn danh); dùng cho lịch sử đơn (FR-21)
+    request_id TEXT,                               -- mã chống gửi trùng do trình duyệt sinh (NFR-31); NULL nếu không gửi kèm. Chỉ mục duy nhất tạo trong app.py
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (shop_id) REFERENCES shops(id)
         ON UPDATE CASCADE ON DELETE CASCADE,
