@@ -1,0 +1,109 @@
+{
+  "kết quả": [
+    {
+      "kịch bản": "Trang chủ",
+      "số yêu cầu": 10,
+      "lỗi": 0,
+      "p50 (ms)": 1.2,
+      "p95 (ms)": 2.7,
+      "lớn nhất (ms)": 2.7,
+      "yêu cầu/giây": 747.7
+    },
+    {
+      "kịch bản": "Trang menu quán (HTML)",
+      "số yêu cầu": 10,
+      "lỗi": 0,
+      "p50 (ms)": 1.2,
+      "p95 (ms)": 1.4,
+      "lớn nhất (ms)": 1.4,
+      "yêu cầu/giây": 806.5
+    },
+    {
+      "kịch bản": "Tra mã QR bàn",
+      "số yêu cầu": 10,
+      "lỗi": 0,
+      "p50 (ms)": 1.4,
+      "p95 (ms)": 1.9,
+      "lớn nhất (ms)": 1.9,
+      "yêu cầu/giây": 696.3
+    },
+    {
+      "kịch bản": "Danh sách món của quán",
+      "số yêu cầu": 10,
+      "lỗi": 0,
+      "p50 (ms)": 1.3,
+      "p95 (ms)": 2.3,
+      "lớn nhất (ms)": 2.3,
+      "yêu cầu/giây": 694.9
+    },
+    {
+      "kịch bản": "Gợi ý món",
+      "số yêu cầu": 10,
+      "lỗi": 0,
+      "p50 (ms)": 1.2,
+      "p95 (ms)": 1.5,
+      "lớn nhất (ms)": 1.5,
+      "yêu cầu/giây": 761.5
+    },
+    {
+      "kịch bản": "Danh mục",
+      "số yêu cầu": 10,
+      "lỗi": 0,
+      "p50 (ms)": 1.5,
+      "p95 (ms)": 2.0,
+      "lớn nhất (ms)": 2.0,
+      "yêu cầu/giây": 647.9
+    },
+    {
+      "kịch bản": "Mở menu đầy đủ, 24 khách cùng lúc (4 lời gọi mỗi lần)",
+      "số yêu cầu": 240,
+      "lỗi": 0,
+      "p50 (ms)": 173.9,
+      "p95 (ms)": 226.8,
+      "lớn nhất (ms)": 303.8,
+      "yêu cầu/giây": 121.6
+    },
+    {
+      "kịch bản": "Gửi đơn, 24 bàn cùng lúc (120 đơn)",
+      "số yêu cầu": 120,
+      "lỗi": 0,
+      "p50 (ms)": 80.5,
+      "p95 (ms)": 242.9,
+      "lớn nhất (ms)": 412.1,
+      "yêu cầu/giây": 131.6
+    },
+    {
+      "kịch bản": "Chủ quán: danh sách đơn",
+      "số yêu cầu": 10,
+      "lỗi": 0,
+      "p50 (ms)": 3.3,
+      "p95 (ms)": 4.7,
+      "lớn nhất (ms)": 4.7,
+      "yêu cầu/giây": 250.7
+    },
+    {
+      "kịch bản": "Chủ quán: doanh thu 30 ngày",
+      "số yêu cầu": 10,
+      "lỗi": 0,
+      "p50 (ms)": 2.6,
+      "p95 (ms)": 3.2,
+      "lớn nhất (ms)": 3.2,
+      "yêu cầu/giây": 355.1
+    },
+    {
+      "kịch bản": "Chủ quán: đánh giá",
+      "số yêu cầu": 10,
+      "lỗi": 0,
+      "p50 (ms)": 2.4,
+      "p95 (ms)": 2.6,
+      "lớn nhất (ms)": 2.6,
+      "yêu cầu/giây": 405.4
+    }
+  ],
+  "kiểm tra mất đơn": {
+    "đơn gửi thành công": 120,
+    "đơn ghi nhận trong CSDL": 120,
+    "khớp": true
+  },
+  "chậm nhất (ms)": 412.1
+}
