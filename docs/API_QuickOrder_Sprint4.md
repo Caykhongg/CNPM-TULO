@@ -63,6 +63,8 @@ Không cần đăng nhập.
 {
   "shop_id": 1,
   "table_id": 3,
+  "qr_token": "mã-QR-hiện-tại-của-bàn",
+  "client_request_id": "0123456789abcdef0123456789abcdef",
   "customer_name": "An",
   "payment_method": "CASH",
   "note": "",
@@ -70,6 +72,11 @@ Không cần đăng nhập.
   "items": [{"dish_id": 7, "quantity": 2, "option_ids": [11, 14], "note": "ít đá"}]
 }
 ```
+
+Hai trường bổ sung từ Sprint 4, đều không bắt buộc đối với người gọi API nhưng trình duyệt luôn gửi:
+
+- `qr_token`: mã QR của bàn. Nếu có thì phải khớp mã hiện tại của bàn, nếu không máy chủ trả 409 (BR-07).
+- `client_request_id`: chuỗi 16 đến 64 ký tự gồm chữ, số, `_` và `-`, trình duyệt sinh ngẫu nhiên cho mỗi lần đặt (NFR-31). Xem “Gửi trùng” bên dưới.
 
 Kiểm tra theo thứ tự (lỗi đầu tiên được trả về):
 
@@ -79,14 +86,21 @@ Kiểm tra theo thứ tự (lỗi đầu tiên được trả về):
 | `items` rỗng hoặc quá 50 dòng | 400 |
 | `payment_method` không phải `CASH` hoặc `TRANSFER` | 400 |
 | Tên khách quá 100 ký tự, ghi chú quá 500 ký tự | 400 |
+| `client_request_id` hoặc `qr_token` sai kiểu, `client_request_id` không đúng định dạng | 400 |
+| `client_request_id` đã tạo một đơn | Trả lại đơn đó, xem “Gửi trùng” (kiểm tra này đứng trước các kiểm tra về quán, bàn, món bên dưới) |
 | Quán không tồn tại hoặc chưa `APPROVED` (kể cả bị khóa, từ chối) | 404 “Quán không tồn tại hoặc chưa được duyệt.” |
-| Ngoài giờ mở cửa (giờ Việt Nam, kể cả quán mở qua nửa đêm) | 409 “Quán hiện không nhận đơn (ngoài giờ mở cửa).” |
+| Ngoài giờ mở cửa (giờ Việt Nam, kể cả quán mở qua nửa đêm) | 409 “Quán tạm ngưng nhận món.” (BR-06) |
 | Bàn không thuộc quán | 400 |
-| Món không có, đã xóa, hoặc hết hàng | 400 “Món <mã món> không tồn tại hoặc đã hết món.” |
-| Số lượng ngoài 1 đến 50, tùy chọn sai món, thiếu nhóm bắt buộc, chọn hai tùy chọn trong nhóm chọn một | 400 |
+| `qr_token` có gửi nhưng không khớp mã hiện tại của bàn (mã đã đổi hoặc là mã của bàn khác) | 409 “Mã QR của bàn đã được đổi. Hãy quét lại mã QR trên bàn.” |
+| Món không thuộc thực đơn của quán | 400 “Có món trong giỏ không còn trong thực đơn của quán. Vui lòng bỏ món đó khỏi giỏ.” |
+| Món đã xóa (ngừng bán) | 400 “Món "<tên món>" đã ngừng bán. Vui lòng bỏ món đó khỏi giỏ.” |
+| Món đang hết hàng | 400 “Món "<tên món>" vừa hết. Vui lòng bỏ món đó khỏi giỏ.” |
+| Số lượng ngoài 1 đến 99 (BR-14), tùy chọn sai món, thiếu nhóm bắt buộc, chọn hai tùy chọn trong nhóm chọn một | 400 |
 | Mã giảm giá sai, hết hạn, hết lượt, chưa đủ đơn tối thiểu | 400 kèm lý do |
 
-Thành công: 201 và đối tượng đơn, thêm `access_token` và `in_my_history`. Toàn bộ ghi đơn, chi tiết đơn và lượt dùng mã nằm trong một giao dịch; lỗi giữa chừng thì không ghi gì (NFR-30).
+Thành công: 201 và đối tượng đơn, thêm `access_token` và `in_my_history`.
+
+**Gửi trùng (NFR-31).** Có `client_request_id` thì `access_token` được sinh từ mã đó (HMAC với khóa của máy chủ) chứ không ngẫu nhiên, và cột `orders.request_id` có chỉ mục duy nhất. Gửi lại đúng mã đã tạo đơn thì máy chủ **không tạo đơn thứ hai**, không giữ thêm lượt mã giảm giá, và trả 200 với đơn cũ cùng đúng `access_token` cũ, thêm `"duplicate": true`. Dùng mã đó cho quán khác thì 409. Hai yêu cầu cùng mã đến đồng thời cũng chỉ tạo một đơn (yêu cầu sau bị chỉ mục chặn rồi trả đơn đã có). Trình duyệt giữ nguyên mã khi gặp lỗi mạng và đổi mã mới khi máy chủ đã trả lời lỗi. Không gửi `client_request_id` thì không chống trùng. Toàn bộ ghi đơn, chi tiết đơn và lượt dùng mã nằm trong một giao dịch; lỗi giữa chừng thì không ghi gì (NFR-30).
 
 ### 4.3. `GET /api/orders/<id>?token=<access_token>` — Xem một đơn (FR-19, FR-41)
 
@@ -151,16 +165,20 @@ Trả về:
 
 Doanh thu và món bán chạy chỉ tính đơn `COMPLETED` (BR-17), tính theo `created_at` đổi sang ngày Việt Nam. Món đã xóa mềm vẫn xuất hiện trong các đơn cũ (BR-12).
 
-## 7. Chỗ còn lệch giữa SRS và code
+## 7. Chỗ lệch giữa SRS và code
 
-| # | SRS yêu cầu | Code đang làm | Đề xuất |
-|---|---|---|---|
-| 1 | BR-14: số lượng mỗi món từ 1 đến 99 | `MAX_QTY = 50` | Chọn một con số và sửa nơi còn lại. Tiêu chí AC-17-12 chỉ thử 0 và 100 nên đạt với cả hai |
-| 2 | NFR-31: khóa nút và **kiểm tra trùng ở máy chủ** | Chỉ khóa nút ở giao diện (`sending`); máy chủ không chống trùng | Thêm `client_request_id` duy nhất cho mỗi lần gửi, hoặc sửa NFR-31 chỉ còn yêu cầu khóa nút |
-| 3 | BR-07: mã cũ vô hiệu khi đổi mã | Quét mã cũ không mở được menu (404). Nhưng `POST /api/orders` nhận `table_id` chứ không kiểm `qr_token`, nên trang đã mở trước khi đổi mã vẫn đặt được | Nhận thêm `qr_token` khi đặt nếu muốn chặt hơn |
-| 4 | BR-06: báo “Quán tạm ngưng nhận món” | Giao diện hiện “Quán hiện không nhận đơn” | Thống nhất một câu |
-| 5 | Ngoại lệ FR-17: báo tên món vừa hết | Thông báo ghi mã món | Đổi thông báo sang tên món |
+Cả 5 chỗ lệch ghi ở bản đầu của mục này đã được sửa trong code và có test (đợt hoàn tất Sprint 4):
 
-Đã sửa trong đợt này (commit `d36fc67`): `PENDING` không còn chuyển được sang `CONFIRMED`.
+| # | SRS yêu cầu | Cách đã xử lý |
+|---|---|---|
+| 1 | BR-14: số lượng mỗi món từ 1 đến 99 | `MAX_QTY = 99`. Test thử 0, 99 và 100 |
+| 2 | NFR-31: khóa nút và kiểm tra trùng ở máy chủ | Thêm `client_request_id` và chỉ mục duy nhất `orders.request_id`; gửi lại trả đơn cũ (mục 4.2). Test: gửi lại cùng mã, mã giảm giá không bị trừ hai lần, mã khác thì ra đơn khác, mã dùng cho quán khác bị từ chối, mã sai định dạng |
+| 3 | BR-07: mã cũ vô hiệu khi đổi mã | `POST /api/orders` nhận thêm `qr_token` và so với mã hiện tại của bàn; giao diện giỏ hàng luôn gửi. Test: đổi mã rồi đặt bằng mã cũ bị 409 và không ghi đơn nào |
+| 4 | BR-06: báo “Quán tạm ngưng nhận món” | Một hằng `SHOP_CLOSED_MSG`, dùng ở máy chủ và các trang menu, giỏ hàng, lịch sử |
+| 5 | Ngoại lệ FR-17: báo tên món vừa hết | Thông báo ghi tên món, tách riêng món đã ngừng bán và món vừa hết |
+
+Giới hạn còn lại: `qr_token` là tùy chọn ở API (để không phá các lời gọi cũ); chỉ trình duyệt của app luôn gửi. Muốn chặt hơn nữa thì bắt buộc trường này.
+
+Đã sửa trước đó (commit `d36fc67`): `PENDING` không còn chuyển được sang `CONFIRMED`.
 
 Thêm theo issue Sprint 4 của Nguyễn Tú Anh (#52): bảng `order_item_options` lưu ảnh chụp tên và giá thêm của tùy chọn lúc đặt (mục 3).

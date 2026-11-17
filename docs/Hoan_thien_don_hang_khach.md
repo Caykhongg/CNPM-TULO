@@ -12,7 +12,7 @@
 
 ## Chạy trong folder VS Code đang dùng
 
-Dùng app ở `QuickOrder/`. Repo có một bản cũ nằm trong thư mục lồng `QuickOrder/QuickOrder/`.
+Dùng app ở `QuickOrder/`. (Bản cũ trong thư mục lồng `QuickOrder/QuickOrder/` đã được xóa.)
 
 Từ thư mục gốc repo, kích hoạt môi trường ảo hiện có rồi chạy:
 
