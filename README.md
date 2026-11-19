@@ -315,7 +315,7 @@ Khách hàng không cần tài khoản để gọi món: chỉ cần mở đư�
 | Chủ quán | `owner1@quickorder.vn` đến `owner6@quickorder.vn` |
 | Khách có tài khoản | `khach1@quickorder.vn` đến `khach4@quickorder.vn` |
 
-🔗 **Bản demo trực tuyến:** *(cập nhật sau khi deploy)*
+🔗 **Bản demo trực tuyến:(https://cnpm-tulo-ii3e.onrender.com/)
 
 ## 🔌 Các endpoint API chính
 
