@@ -62,7 +62,7 @@ const QO = (() => {
   // Giỏ hàng: lưu trong phiên của tab (sessionStorage), gắn với bàn; đóng tab là mất giỏ (SRS mục 1.4)
   const getCart = () => { try { return JSON.parse(sessionStorage.getItem('qo_cart')) || {shop_id:null, table:null, items:[]}; } catch { return {shop_id:null, table:null, items:[]}; } };
   const setCart = c => { sessionStorage.setItem('qo_cart', JSON.stringify(c)); badge(); };
-  const badge = () => { const n = getCart().items.reduce((s, i) => s + i.qty, 0), b = document.getElementById('cart-n'); if (b) b.textContent = n || ''; if (b) b.style.display = n ? '' : 'none'; };
+  const badge = () => { const n = getCart().items.reduce((s, i) => s + i.qty, 0); document.querySelectorAll('.badge-n').forEach(b => { b.textContent = n || ''; b.style.display = n ? '' : 'none'; }); };
 
   // Hồ sơ tạm của khách chưa có tài khoản: chỉ lưu trong sessionStorage của tab, đóng tab là mất (không gửi lên server)
   const getGuest = () => { try { return JSON.parse(sessionStorage.getItem('qo_guest')) || null; } catch { return null; } };
@@ -145,6 +145,8 @@ const QO = (() => {
   const header = () => {
     const here = location.pathname;
     const sec = /\/merchant\//.test(here) ? 'merchant' : /\/customer\//.test(here) ? 'customer' : 'home';
+    const cartHref = `${rootUrl()}customer/cart.html`;
+    const cartOn = here.endsWith('/customer/cart.html') ? ' on' : '';
     document.body.insertAdjacentHTML('afterbegin', `<header class="topbar"><div class="in">
       <a class="logo" href="${homeUrl()}">Quick<b>Order</b></a>
       <nav class="switch" aria-label="Chọn khu vực">
@@ -157,6 +159,7 @@ const QO = (() => {
           <div class="dd-panel"><div class="dd-box"><p class="dd-desc" id="mer-desc">Đăng nhập để quản lý quán của bạn.</p><div class="dd-links" id="mer-links">${guestLinks()}</div></div></div>
         </div>
       </nav>
+      <a class="cart-pill${cartOn}" href="${cartHref}" aria-label="Giỏ hàng">🛒 <span class="cart-label">Giỏ hàng</span><span class="badge-n"></span></a>
       <div class="acct" id="acct" hidden><span id="who"></span><button type="button" id="logout">Đăng xuất</button></div>
     </div></header>`);
 
