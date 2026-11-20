@@ -33,7 +33,7 @@ QO.header('customer');
     const table = o.table_number || saved?.table_number;
     $('tracking-title').textContent = 'Theo dõi đơn #' + o.id;
     document.title = 'Đơn #' + o.id + ' - QuickOrder';
-    root.innerHTML = `<section class="card">
+    root.innerHTML = `<div class="tracking-layout"><section class="card">
       <div class="row"><div><h2>${QO.esc(o.shop_name || saved?.shop_name || 'Quán')}</h2><span class="meta">${table ? QO.esc(QO.tableLabel(table)) + ' · ' : ''}${QO.esc(QO.fmtTime(o.created_at))}</span></div><span class="tag ${tone}">${label}</span></div>
       <p style="margin-top:12px">${descriptions[o.status] || ''}</p>${steps}
       ${o.status === 'CANCELLED' && o.cancel_reason ? `<p class="tracking-note" style="margin-top:12px"><b>Lý do hủy:</b> ${QO.esc(o.cancel_reason)}</p>` : ''}
@@ -41,12 +41,12 @@ QO.header('customer');
         ${o.status !== 'PENDING' ? '<button class="btn ghost" type="button" id="complain-order">Xem / gửi khiếu nại</button>' : ''}
         <a class="btn ghost" href="orders.html">Danh sách đơn</a></div>
     </section>
-    <section class="card"><h2>Món đã đặt</h2><ul class="tracking-items">${o.items.map(i => `<li><div><b>${i.quantity} × ${QO.esc(i.dish_name)}</b>${i.note ? `<div class="meta tracking-note">${QO.esc(i.note)}</div>` : ''}</div><span class="price">${QO.money(i.quantity * i.unit_price)}</span></li>`).join('')}</ul>
+    <section class="card tracking-aside"><h2>Món đã đặt</h2><ul class="tracking-items">${o.items.map(i => `<li><div><b>${i.quantity} × ${QO.esc(i.dish_name)}</b>${i.note ? `<div class="meta tracking-note">${QO.esc(i.note)}</div>` : ''}</div><span class="price">${QO.money(i.quantity * i.unit_price)}</span></li>`).join('')}</ul>
       ${o.note ? `<p class="tracking-note" style="margin-top:12px"><b>Ghi chú:</b> ${QO.esc(o.note)}</p>` : ''}
       <div class="tracking-total">${o.discount_amount ? `<div class="row meta"><span>Tạm tính</span><span>${QO.money(o.total_amount + o.discount_amount)}</span></div><div class="row meta"><span>Giảm giá (${QO.esc(o.coupon_code)})</span><span>−${QO.money(o.discount_amount)}</span></div>` : ''}
         <div class="row"><b>Tổng cộng</b><span class="price">${QO.money(o.total_amount)}</span></div>
         <p class="meta" style="margin-top:8px">${QO.PAY_METHOD[o.payment_method] || ''} · ${o.payment_status === 'PAID' ? 'Đã thanh toán' : 'Chưa thanh toán'}</p></div>
-    </section>`;
+    </section></div>`;
   };
   const load = async () => {
     if (loading || cancelling || stopped) return;

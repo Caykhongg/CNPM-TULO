@@ -1,4 +1,7 @@
-.tracking-page{max-width:850px}
+.tracking-page{max-width:1100px}
+.tracking-layout{display:grid;grid-template-columns:1fr 360px;gap:20px;align-items:start}
+@media(max-width:760px){.tracking-layout{grid-template-columns:1fr}}
+@media(max-width:760px){.tracking-layout .tracking-aside{order:2}}
 .tracking-page [hidden]{display:none!important}
 .tracking-heading{margin-bottom:6px}
 .tracking-heading h1{margin-top:6px}
