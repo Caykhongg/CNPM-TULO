@@ -46,13 +46,7 @@ QO.header('customer');
   const renderPay = () => {
     if (method !== 'TRANSFER') { payEl.textContent = 'Thanh toán tiền mặt khi nhận món hoặc tại quầy.'; return; }
     if (!shop) { payEl.textContent = ''; return; }
-    const info = shop.bank_account_number ? 'Số tài khoản: ' + QO.esc(shop.bank_account_number) : 'Quán chưa cập nhật số tài khoản.';
-    const img = shop.payment_qr_image || '';
-    // Ảnh do quán tải lên (/uploads/...) hiện ngay; chỉ cho phép liên kết http(s) để tránh javascript: từ dữ liệu quán
-    const qr = /^\/uploads\/[0-9a-f]{32}\.(png|jpg|webp)$/.test(img)
-      ? `<div style="margin-top:8px"><img src="${QO.esc(img)}" alt="Mã QR chuyển khoản của quán" style="max-width:220px;width:100%;border:1px solid var(--line);border-radius:10px"></div>`
-      : /^https?:\/\//i.test(img) ? ` · <a href="${QO.esc(img)}" target="_blank" rel="noopener">Xem mã QR</a>` : '';
-    payEl.innerHTML = info + qr;
+    payEl.textContent = 'Bấm Thanh toán chuyển khoản để nhận QR riêng có sẵn số tiền và nội dung. Đơn chỉ gửi tới quán sau khi hệ thống xác nhận tiền vào.';
   };
 
   const renderSum = (total, count) => {
@@ -122,7 +116,7 @@ QO.header('customer');
 
     const accepting = !!shop && QO.isAccepting(shop);
     orderBtn.disabled = sending || !tb || !accepting;
-    orderBtn.textContent = sending ? 'Đang gửi...' : (shop && !accepting ? 'Quán tạm ngưng nhận món' : 'Đặt hàng');
+    orderBtn.textContent = sending ? 'Đang gửi...' : (shop && !accepting ? 'Quán tạm ngưng nhận món' : method === 'TRANSFER' ? 'Thanh toán chuyển khoản' : 'Đặt hàng · Tiền mặt');
   };
 
   box.onclick = e => {
@@ -191,6 +185,12 @@ QO.header('customer');
       return;
     }
     requestId = '';
+    if (order.kind === 'PAYMENT_CHECKOUT') {
+      const stored = QO.savePendingPayment({id: order.id, token: order.access_token, shop_name: shop.name, cart: JSON.stringify(c)});
+      // Chưa thanh toán nên giữ giỏ; không thêm vào danh sách đơn bếp.
+      location.href = new URL(QO.paymentUrl(order.id, stored ? '' : order.access_token), location.href).href;
+      return;
+    }
     // Tách lỗi lưu trên thiết bị khỏi lỗi gửi đơn: đơn đã tạo thì chuyển tới theo dõi.
     const saved = QO.addOrder({id: order.id, token: order.access_token, shop_id: order.shop_id, shop_name: shop.name, table_number: tb.table_number});
     try { QO.setCart({shop_id: null, table: null, items: []}); } catch {}

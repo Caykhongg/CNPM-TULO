@@ -56,7 +56,7 @@ QO.header('merchant');
     const items = o.items.map(i => `<li><b>${i.quantity} ×</b> ${QO.esc(i.dish_name)}${i.note ? `<div class="meta">${QO.esc(i.note)}</div>` : ''}</li>`).join('');
     const acts = (ACTIONS[o.status] || []).map(([to, t, k]) => `<button class="${k}" data-status="${to}" data-id="${o.id}">${t}</button>`).join('');
     const paid = o.payment_status === 'PAID';
-    const pay = o.status === 'CANCELLED' ? '' :
+    const pay = o.status === 'CANCELLED' || (o.payment_method === 'TRANSFER' && o.payment_status === 'PAID') ? '' :
       `<button class="btn ghost sm" data-pay="${paid ? 'UNPAID' : 'PAID'}" data-id="${o.id}">${paid ? 'Hoàn tác thanh toán' : 'Xác nhận đã thanh toán'}</button>`;
     return `<article class="item" style="display:block;${o.status === 'PENDING' ? 'border-color:var(--acc);' : ''}">
       <div class="row">

@@ -14,6 +14,9 @@ from werkzeug.exceptions import HTTPException
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import mailer
+import xapi_client
+import bank_connections
+from payment_api import PaymentService
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 DB = os.environ.get("QO_DB") or os.path.join(BASE, "database.db")   # QO_DB: dùng khi chạy kiểm thử
@@ -144,6 +147,16 @@ def migrate_categories(c):
 def init_db():
     with db() as c, open(os.path.join(BASE, "schema.sql"), encoding="utf-8") as f:
         c.executescript(f.read())
+        for col in ('bank_bin', 'bank_account_name'):
+            if col not in columns(c, 'shops'):
+                c.execute(f"ALTER TABLE shops ADD COLUMN {col} TEXT NOT NULL DEFAULT ''")
+        for table_name, additions in {
+            'payment_checkouts': [('verification_mode', "TEXT NOT NULL DEFAULT 'AUTO'"), ('connection_id', 'INTEGER REFERENCES payment_connections(id)')],
+            'payment_receipts': [('verification_method', "TEXT NOT NULL DEFAULT 'AUTO'"), ('confirmed_by', 'INTEGER REFERENCES users(id)')],
+        }.items():
+            for col, definition in additions:
+                if col not in columns(c, table_name):
+                    c.execute(f'ALTER TABLE {table_name} ADD COLUMN {col} {definition}')
         migrate_categories(c)                  # danh mục chung (shop_id NULL) và danh mục riêng của từng quán
         # CSDL cũ: bảng orders tạo trước khi có mã đơn và lý do hủy thì bổ sung cột (CREATE IF NOT EXISTS không làm việc này)
         have = {r["name"] for r in c.execute("PRAGMA table_info(orders)")}
@@ -152,6 +165,8 @@ def init_db():
                 c.execute(f"ALTER TABLE orders ADD COLUMN {col} TEXT NOT NULL DEFAULT ''")
         if "discount_amount" not in have:
             c.execute("ALTER TABLE orders ADD COLUMN discount_amount INTEGER NOT NULL DEFAULT 0")
+        if "payment_source" not in have:
+            c.execute("ALTER TABLE orders ADD COLUMN payment_source TEXT NOT NULL DEFAULT 'MANUAL'")
         # FR-21: đơn gắn với tài khoản khách (NULL nếu khách ẩn danh). Chỉ tạo chỉ mục sau khi chắc chắn đã có cột.
         if "user_id" not in have:
             c.execute("ALTER TABLE orders ADD COLUMN user_id INTEGER REFERENCES users(id) ON UPDATE CASCADE ON DELETE SET NULL")
@@ -316,6 +331,18 @@ def guard_write(c, name, rid, data, u):
 
 
 def check_values(name, data):
+    if name == "shops":
+        patterns = {"bank_bin": r"[0-9]{6}", "bank_account_number": r"[A-Za-z0-9]{6,19}"}
+        for key, pattern in patterns.items():
+            if key in data:
+                if data[key] is None:
+                    data[key] = ""
+                if not isinstance(data[key], str) or (data[key] and not re.fullmatch(pattern, data[key])):
+                    return jsonify(error="Mã BIN ngân hàng gồm 6 số; số tài khoản gồm 6–19 chữ/số, không có dấu cách."), 400
+        if "bank_account_name" in data:
+            if not isinstance(data["bank_account_name"], str) or len(data["bank_account_name"].strip()) > 100:
+                return jsonify(error="Tên chủ tài khoản không hợp lệ."), 400
+            data["bank_account_name"] = data["bank_account_name"].strip()
     # Kiểm tra tên danh mục.
     if name == "categories" and "name" in data:
         value = data["name"]
@@ -660,6 +687,11 @@ def update_row(name, id):
         err = check_values(name, data)
         if err:
             return err
+        if name == "shops" and any(k in data for k in ("bank_bin", "bank_account_number")):
+            old = c.execute("SELECT * FROM shops WHERE id=?", (id,)).fetchone()
+            if old and any(k in data and data[k] != old[k] for k in ("bank_bin", "bank_account_number")):
+                # Thông tin ngân hàng thay qua API cũ: phiếu mới trở về thủ công. Phiếu cũ giữ kết nối đã chốt.
+                c.execute("INSERT INTO shop_payment_settings(shop_id,mode,connection_id) VALUES (?,'MANUAL',NULL) ON CONFLICT(shop_id) DO UPDATE SET mode='MANUAL',connection_id=NULL", (id,))
         if name == "tables":
             if data.pop("regenerate", False):              # tạo lại mã: mã cũ vô hiệu ngay (BR-07)
                 data["qr_token"] = secrets.token_urlsafe(16)
@@ -1005,6 +1037,25 @@ def duplicate_order(c, existing, shop_id, request_id):
     return jsonify(result), 200
 
 
+def insert_order(c, spec, access_hash, request_id, paid=False, source='MANUAL'):
+    uid = spec["user_id"]
+    if uid and not c.execute("SELECT 1 FROM users WHERE id=?", (uid,)).fetchone():
+        uid = None
+    order_id = c.execute(
+        "INSERT INTO orders (shop_id, table_id, customer_name, payment_method, payment_status, payment_source, total_amount, note, access_hash, "
+        "coupon_code, discount_amount, user_id, request_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (spec["shop_id"], spec["table_id"], spec["customer_name"], spec["payment_method"], 'PAID' if paid else 'UNPAID',
+         source, spec["total"], spec["note"], access_hash, spec["coupon_code"], spec["discount"], uid, request_id)).lastrowid
+    for dish_id, qty, unit, line_note, opt_ids, snap in spec["lines"]:
+        item_id = c.execute("INSERT INTO order_items (order_id, dish_id, quantity, unit_price, note, option_ids) VALUES (?,?,?,?,?,?)",
+                            (order_id, dish_id, qty, unit, line_note, opt_ids)).lastrowid
+        for oid, name, price, gname in snap:
+            exists = c.execute("SELECT 1 FROM options WHERE id=?", (oid,)).fetchone()
+            c.execute("INSERT INTO order_item_options (order_item_id, option_id, option_name, extra_price, group_name) VALUES (?,?,?,?,?)",
+                      (item_id, oid if exists else None, name, price, gname))
+    return order_id
+
+
 @app.post("/api/orders")
 def create_order():
     d = json_body()
@@ -1039,12 +1090,16 @@ def create_order():
         return jsonify(error="qr_token không hợp lệ."), 400
 
     with db() as c:
+        c.execute("BEGIN IMMEDIATE")     # chống tạo trùng giữa cash, checkout và tác vụ đối soát
+        payment_service.expire(c)
         if request_id:
+            pending = c.execute("SELECT * FROM payment_checkouts WHERE request_id=?", (request_id,)).fetchone()
+            if pending:
+                return payment_service.duplicate(c, pending, shop_id, request_id)
             same = c.execute("SELECT id, shop_id, user_id FROM orders WHERE request_id = ?", (request_id,)).fetchone()
             if same:
                 return duplicate_order(c, same, shop_id, request_id)
-        shop = c.execute("SELECT id, open_time, close_time FROM shops WHERE id = ? AND status = 'APPROVED'",
-                         (shop_id,)).fetchone()
+        shop = c.execute("SELECT * FROM shops WHERE id = ? AND status = 'APPROVED'", (shop_id,)).fetchone()
         if not shop:
             return jsonify(error="Quán không tồn tại hoặc chưa được duyệt."), 404
         if not is_open_now(shop):
@@ -1052,10 +1107,8 @@ def create_order():
         table = c.execute("SELECT qr_token FROM shop_tables WHERE id = ? AND shop_id = ?", (table_id, shop_id)).fetchone()
         if not table:
             return jsonify(error="Bàn không thuộc quán này."), 400
-        # BR-07: mã QR đã đổi thì trang mở từ mã cũ không đặt được nữa
         if qr_token is not None and not hmac.compare_digest(table["qr_token"], qr_token):
             return jsonify(error="Mã QR của bàn đã được đổi. Hãy quét lại mã QR trên bàn."), 409
-
         lines, subtotal, err = price_lines(c, shop_id, items)
         if err:
             return jsonify(error=err), 400
@@ -1065,37 +1118,26 @@ def create_order():
             cp, discount, err = check_coupon(c, shop_id, code, subtotal)
             if err:
                 return jsonify(error=err), 400
-            # giữ chỗ một lượt dùng; câu lệnh này kiểm tra lại số lượt nên hai khách cùng lúc không vượt giới hạn
-            got = c.execute("UPDATE coupons SET used_count = used_count + 1 WHERE id = ? AND (max_uses = 0 OR used_count < max_uses)",
-                            (cp["id"],))
+        total = subtotal - discount
+        if payment_method == "TRANSFER" and total > 0:
+            try:
+                bank_connections.recipient({'bank_bin': shop['bank_bin'], 'account_number': shop['bank_account_number'], 'account_name': shop['bank_account_name']})
+                bank_connections.current_config(c, shop)
+            except xapi_client.PaymentError as error:
+                return jsonify(error=str(error)), 409
+        if cp:
+            got = c.execute("UPDATE coupons SET used_count = used_count + 1 WHERE id = ? AND (max_uses = 0 OR used_count < max_uses)", (cp["id"],))
             if got.rowcount == 0:
                 return jsonify(error="Mã giảm giá đã hết lượt dùng."), 400
-        total = subtotal - discount                    # BR-13: tổng tiền sau giảm giá
-
-        # Mã riêng của đơn: server chỉ giữ băm. Có client_request_id thì mã sinh từ đó, để gửi lại cùng mã vẫn trả đúng mã cũ.
         token = request_token(request_id) if request_id else secrets.token_urlsafe(24)
         u = current_user()
-        user_id = u["id"] if u and u["role"] == "customer" else None   # khách đã đăng nhập thì đơn vào lịch sử (FR-21)
-        try:
-            order_id = c.execute(
-                "INSERT INTO orders (shop_id, table_id, customer_name, payment_method, total_amount, note, access_hash, "
-                "coupon_code, discount_amount, user_id, request_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-                (shop_id, table_id, customer, payment_method, total, note, token_hash(token),
-                 cp["code"] if cp else "", discount, user_id, request_id)).lastrowid
-        except sqlite3.IntegrityError:
-            # Hai yêu cầu cùng mã đến cùng lúc: yêu cầu đến sau hủy phần mình (kể cả lượt mã giảm giá đã giữ) và trả đơn đã có.
-            c.rollback()
-            same = c.execute("SELECT id, shop_id, user_id FROM orders WHERE request_id = ?", (request_id,)).fetchone() if request_id else None
-            if not same:
-                raise
-            return duplicate_order(c, same, shop_id, request_id)
-        for dish_id, qty, unit, line_note, opt_ids, snap in lines:
-            item_id = c.execute(
-                "INSERT INTO order_items (order_id, dish_id, quantity, unit_price, note, option_ids) VALUES (?,?,?,?,?,?)",
-                (order_id, dish_id, qty, unit, line_note, opt_ids)).lastrowid
-            c.executemany(
-                "INSERT INTO order_item_options (order_item_id, option_id, option_name, extra_price, group_name) VALUES (?,?,?,?,?)",
-                [(item_id, oid, name, price, gname) for oid, name, price, gname in snap])
+        user_id = u["id"] if u and u["role"] == "customer" else None
+        spec = dict(shop_id=shop_id, table_id=table_id, qr_token=table["qr_token"], customer_name=customer,
+                    payment_method=payment_method, total=total, note=note, coupon_code=cp["code"] if cp else "",
+                    discount=discount, coupon_id=cp["id"] if cp else None, user_id=user_id, lines=lines)
+        if payment_method == "TRANSFER" and total > 0:
+            return payment_service.create(c, shop, spec, token, request_id)
+        order_id = insert_order(c, spec, token_hash(token), request_id, paid=(total == 0))
         result = order_json(c, order_id)
     result["access_token"] = token
     result["in_my_history"] = user_id is not None
@@ -1192,6 +1234,7 @@ def update_order_status(id):
             return jsonify(error="Đơn vừa được cập nhật, hãy tải lại."), 409
         if status == "CANCELLED":
             release_coupon(c, order)
+            payment_service.flag_cancelled(c, id)
         return jsonify(order_json(c, id))
 
 
@@ -1210,6 +1253,7 @@ def cancel_order(id):
         if done.rowcount == 0:
             return jsonify(error="Chỉ có thể hủy đơn đang chờ xác nhận."), 409
         release_coupon(c, order)
+        payment_service.flag_cancelled(c, id)
         return jsonify(order_json(c, id))
 
 
@@ -1224,6 +1268,8 @@ def update_order_payment(id):
             abort(404)
         if not owns_order(c, order, u):
             abort(403)
+        if c.execute("SELECT 1 FROM payment_checkouts WHERE order_id=? AND state='PAID'", (id,)).fetchone():
+            return jsonify(error="Đơn chuyển khoản đã được xác nhận; không thể hoàn tác bằng nút thu tiền thủ công."), 409
         paid = str(d.get("payment_status") or "").upper()
         if paid not in ("PAID", "UNPAID"):
             return jsonify(error="payment_status phải là PAID hoặc UNPAID."), 400
@@ -1911,6 +1957,12 @@ from complaint_api import register_complaint_routes
 
 register_complaint_routes(
     app, db=db, login_required=login_required, json_body=json_body, out=complaint_view,
+)
+
+payment_service = PaymentService(
+    app, db=db, current_user=current_user, login_required=login_required, json_body=json_body,
+    token_hash=token_hash, token_ok=token_ok, request_token=request_token, shop_for=shop_for,
+    insert_order=insert_order, order_json=order_json, release_coupon=release_coupon, is_open_now=is_open_now,
 )
 
 init_db()

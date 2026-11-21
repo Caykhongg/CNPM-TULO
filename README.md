@@ -419,3 +419,10 @@ Kiểm thử logic JavaScript (nếu có Node.js): chạy `node --test tests/tes
 ---
 
 <p align="center">Đồ án môn Công nghệ phần mềm – Đại học CMC – Hà Nội, 2026</p>
+
+
+### Ngân hàng và thanh toán chuyển khoản
+
+Chủ quán chọn ngân hàng, nhập số tài khoản và token/URL xAPI ngay trên web. Không nhập token thì quán xác nhận thủ công; kết nối xAPI hợp lệ thì server tự đối soát. QR của mỗi phiếu điền sẵn số tiền và mã riêng; chỉ gửi đơn tới quán sau khi xác nhận thanh toán. Tác vụ nền chạy trong server, không cần mở lệnh quét riêng.
+
+Xem [hướng dẫn cập nhật folder VS Code và thử ngân hàng thật](docs/Thanh_toan_XAPI_QuickOrder.md). Token được mã hóa ở server, không trả về trình duyệt. Khi nhận tiền thật, CSDL phải được lưu bền vững và server phải duy trì hoạt động.

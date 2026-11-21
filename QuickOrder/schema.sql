@@ -23,6 +23,8 @@ CREATE TABLE IF NOT EXISTS shops (
     open_time TEXT,
     close_time TEXT,
     bank_account_number TEXT,
+    bank_bin TEXT NOT NULL DEFAULT '',
+    bank_account_name TEXT NOT NULL DEFAULT '',
     payment_qr_image TEXT,
     status TEXT NOT NULL DEFAULT 'PENDING'
         CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED', 'LOCKED')),
@@ -107,6 +109,7 @@ CREATE TABLE IF NOT EXISTS orders (
         )),
     payment_method TEXT NOT NULL DEFAULT 'CASH'
         CHECK (payment_method IN ('CASH', 'TRANSFER')),
+    payment_source TEXT NOT NULL DEFAULT 'MANUAL' CHECK(payment_source IN ('MANUAL','XAPI')),
     payment_status TEXT NOT NULL DEFAULT 'UNPAID'
         CHECK (payment_status IN ('UNPAID', 'PAID')),
     total_amount INTEGER NOT NULL DEFAULT 0 CHECK (total_amount >= 0),
@@ -265,3 +268,67 @@ CREATE INDEX IF NOT EXISTS idx_complaints_user
 
 CREATE INDEX IF NOT EXISTS idx_complaints_shop_status
     ON complaints(shop_id, status, id);
+
+-- Phiếu chuyển khoản CHƯA phải đơn bếp. Chỉ insert orders sau khi đối soát thành công.
+CREATE TABLE IF NOT EXISTS payment_checkouts (
+    id TEXT PRIMARY KEY,
+    shop_id INTEGER NOT NULL REFERENCES shops(id) ON DELETE RESTRICT,
+    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    request_id TEXT UNIQUE,
+    access_hash TEXT NOT NULL,
+    transfer_code TEXT NOT NULL UNIQUE,
+    amount INTEGER NOT NULL CHECK(amount > 0),
+    bank_bin TEXT NOT NULL,
+    account_number TEXT NOT NULL,
+    account_name TEXT NOT NULL,
+    snapshot TEXT NOT NULL,
+    verification_mode TEXT NOT NULL DEFAULT 'AUTO',
+    connection_id INTEGER REFERENCES payment_connections(id) ON DELETE RESTRICT,
+    coupon_code TEXT NOT NULL DEFAULT '',
+    coupon_id INTEGER REFERENCES coupons(id) ON DELETE SET NULL,
+    coupon_reserved INTEGER NOT NULL DEFAULT 0,
+    state TEXT NOT NULL DEFAULT 'WAITING' CHECK(state IN ('WAITING','PAID','EXPIRED','REVIEW')),
+    order_id INTEGER REFERENCES orders(id) ON DELETE RESTRICT,
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_payment_shop ON payment_checkouts(shop_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_payment_user ON payment_checkouts(user_id, created_at);
+CREATE TABLE IF NOT EXISTS payment_receipts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    checkout_id TEXT NOT NULL REFERENCES payment_checkouts(id) ON DELETE RESTRICT,
+    bank_bin TEXT NOT NULL,
+    account_number TEXT NOT NULL,
+    transaction_id TEXT NOT NULL,
+    amount INTEGER NOT NULL,
+    description TEXT NOT NULL,
+    verification_method TEXT NOT NULL DEFAULT 'AUTO',
+    confirmed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    review_reason TEXT NOT NULL DEFAULT '',
+    resolved_note TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(bank_bin, account_number, transaction_id)
+);
+CREATE TABLE IF NOT EXISTS payment_poll_locks (
+    shop_id INTEGER PRIMARY KEY REFERENCES shops(id) ON DELETE CASCADE,
+    next_poll INTEGER NOT NULL DEFAULT 0
+);
+
+-- Phiên bản kết nối được giữ riêng để phiếu cũ vẫn đối soát đúng tài khoản đã in trên QR.
+CREATE TABLE IF NOT EXISTS payment_connections (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    shop_id INTEGER NOT NULL REFERENCES shops(id) ON DELETE RESTRICT,
+    bank_bin TEXT NOT NULL,
+    account_number TEXT NOT NULL,
+    credentials_enc TEXT NOT NULL,
+    verified_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS shop_payment_settings (
+    shop_id INTEGER PRIMARY KEY REFERENCES shops(id) ON DELETE CASCADE,
+    mode TEXT NOT NULL CHECK(mode IN ('MANUAL','AUTO')),
+    connection_id INTEGER REFERENCES payment_connections(id) ON DELETE RESTRICT
+);
+CREATE TABLE IF NOT EXISTS payment_source_locks (
+    source_key TEXT PRIMARY KEY,
+    next_poll INTEGER NOT NULL DEFAULT 0
+);
