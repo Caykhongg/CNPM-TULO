@@ -81,6 +81,18 @@ const QO = (() => {
   // Mã dự phòng nằm trong fragment khi trình duyệt không lưu được đơn; fragment không gửi lên server.
   const orderTrackingUrl = (id, token = '') => 'track.html?id=' + Number(id) + (token ? '#token=' + encodeURIComponent(token) : '');
 
+  // Phiếu QR được lưu riêng: chưa phải đơn hàng cho tới khi server xác nhận tiền vào.
+  const getPendingPayments = () => { try {
+    const rows = JSON.parse(localStorage.getItem('qo_payments'));
+    return Array.isArray(rows) ? rows.filter(p => p && /^[a-f0-9]{32}$/.test(p.id)).slice(0, 30) : [];
+  } catch { return []; } };
+  const savePendingPayment = p => { try {
+    localStorage.setItem('qo_payments', JSON.stringify([p, ...getPendingPayments().filter(x => x.id !== p.id)].slice(0, 30)));
+    return true;
+  } catch { return false; } };
+  const forgetPendingPayment = id => { try { localStorage.setItem('qo_payments', JSON.stringify(getPendingPayments().filter(p => p.id !== id))); } catch {} };
+  const paymentUrl = (id, token = '') => 'pay.html?id=' + encodeURIComponent(id) + (token ? '#token=' + encodeURIComponent(token) : '');
+
   // ===== Khiếu nại đơn hàng (FR-26) =====
   // Hộp thoại dùng chung: khách có tài khoản gọi {orderId}; khách ẩn danh gọi thêm {token} (mã riêng của đơn lưu trên thiết bị).
   const COMPLAINT_STATUS = {OPEN: ['Đã gửi', 'wait'], REPLIED: ['Đã phản hồi', 'ok'], CLOSED: ['Đã đóng', 'no']};
@@ -125,7 +137,7 @@ const QO = (() => {
   // Mục quản lý của chủ quán chỉ hiện khi phiên đăng nhập là chủ quán.
   const SECTIONS = {
     customer: [['customer/home.html', 'Gọi món tại bàn'], ['customer/cart.html', 'Giỏ hàng'], ['customer/orders.html', 'Đơn hàng'], ['customer/history.html', 'Lịch sử'], ['customer/profile.html', 'Hồ sơ']],
-    merchant: [['merchant/dashboard.html', 'Tổng quan'], ['merchant/orders.html', 'Đơn hàng'], ['merchant/menu.html', 'Thực đơn'], ['merchant/tables.html', 'Bàn & QR'], ['merchant/bills.html', 'Tính tiền bàn'], ['merchant/revenue.html', 'Doanh thu'], ['merchant/coupons.html', 'Mã giảm giá'], ['merchant/reviews.html', 'Đánh giá'], ['merchant/complaints.html', 'Khiếu nại'], ['merchant/shop.html', 'Hồ sơ quán']]
+    merchant: [['merchant/dashboard.html', 'Tổng quan'], ['merchant/orders.html', 'Đơn hàng'], ['merchant/menu.html', 'Thực đơn'], ['merchant/tables.html', 'Bàn & QR'], ['merchant/bills.html', 'Tính tiền bàn'], ['merchant/revenue.html', 'Doanh thu'], ['merchant/coupons.html', 'Mã giảm giá'], ['merchant/reviews.html', 'Đánh giá'], ['merchant/complaints.html', 'Khiếu nại'], ['merchant/shop.html#bank-section', 'Ngân hàng & thanh toán'], ['merchant/shop.html', 'Hồ sơ quán']]
   };
   const linkTo = ([p, t]) => `<a href="${rootUrl()}${p}"${location.pathname.endsWith('/' + p) ? ' class="on" aria-current="page"' : ''}>${t}${p === 'customer/cart.html' ? '<span class="badge-n" id="cart-n"></span>' : ''}</a>`;
   const guestLinks = () => `<a href="${rootUrl()}merchant/login.html">Đăng nhập</a><a href="${rootUrl()}merchant/login.html?mode=register">Đăng ký tài khoản</a>`;
@@ -177,5 +189,5 @@ const QO = (() => {
 
   return {api, all, get, by, put, del, isOpenNow, isAccepting, isOrderable, validateSelection, qrUrl, STATUS, ORDER_STATUS, PAY_METHOD,
     esc, money, norm, hash, toast, param, newRequestId, parseTime, fmtTime, tableLabel, session, logout, requireOwner, myShop, getCart, setCart, getGuest, setGuest, clearGuest,
-    getOrders, saveOrders, addOrder, orderTrackingUrl, complaintDialog, COMPLAINT_STATUS, header};
+    getOrders, saveOrders, addOrder, orderTrackingUrl, getPendingPayments, savePendingPayment, forgetPendingPayment, paymentUrl, complaintDialog, COMPLAINT_STATUS, header};
 })();

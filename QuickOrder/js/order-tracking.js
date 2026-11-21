@@ -75,7 +75,7 @@ QO.header('customer');
   root.onclick = async e => {
     if (e.target.closest('#complain-order')) { QO.complaintDialog({orderId: id, token}); return; }
     if (!e.target.closest('#cancel-order') || !order || order.status !== 'PENDING' || loading || cancelling) return;
-    if (!confirm('Hủy đơn #' + id + '? Chỉ hủy được khi quán chưa xác nhận.')) return;
+    if (!confirm('Hủy đơn #' + id + '? Chỉ hủy được khi quán chưa xác nhận.' + ((order.payment_method === 'TRANSFER' && order.payment_status === 'PAID') ? ' Đơn đã trả tiền; quán sẽ cần xử lý hoàn tiền riêng.' : ''))) return;
     cancelling = true; render(); showError('');
     let failure = '';
     try {
