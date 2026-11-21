@@ -62,7 +62,10 @@ const QO = (() => {
   // Giỏ hàng: lưu trong phiên của tab (sessionStorage), gắn với bàn; đóng tab là mất giỏ (SRS mục 1.4)
   const getCart = () => { try { return JSON.parse(sessionStorage.getItem('qo_cart')) || {shop_id:null, table:null, items:[]}; } catch { return {shop_id:null, table:null, items:[]}; } };
   const setCart = c => { sessionStorage.setItem('qo_cart', JSON.stringify(c)); badge(); };
-  const badge = () => { const n = getCart().items.reduce((s, i) => s + i.qty, 0); document.querySelectorAll('.badge-n').forEach(b => { b.textContent = n || ''; b.style.display = n ? '' : 'none'; }); };
+  const badge = () => {
+    const n = getCart().items.reduce((total, item) => total + item.qty, 0);
+    document.querySelectorAll('.badge-n').forEach(b => { b.textContent = n || ''; b.hidden = !n; });
+  };
 
   // Hồ sơ tạm của khách chưa có tài khoản: chỉ lưu trong sessionStorage của tab, đóng tab là mất (không gửi lên server)
   const getGuest = () => { try { return JSON.parse(sessionStorage.getItem('qo_guest')) || null; } catch { return null; } };
@@ -80,6 +83,18 @@ const QO = (() => {
   const addOrder = o => saveOrders([o, ...getOrders().filter(x => x.id !== o.id)].slice(0, 30));
   // Mã dự phòng nằm trong fragment khi trình duyệt không lưu được đơn; fragment không gửi lên server.
   const orderTrackingUrl = (id, token = '') => 'track.html?id=' + Number(id) + (token ? '#token=' + encodeURIComponent(token) : '');
+
+  // Phiếu QR được lưu riêng: chưa phải đơn hàng cho tới khi server xác nhận tiền vào.
+  const getPendingPayments = () => { try {
+    const rows = JSON.parse(localStorage.getItem('qo_payments'));
+    return Array.isArray(rows) ? rows.filter(p => p && /^[a-f0-9]{32}$/.test(p.id)).slice(0, 30) : [];
+  } catch { return []; } };
+  const savePendingPayment = p => { try {
+    localStorage.setItem('qo_payments', JSON.stringify([p, ...getPendingPayments().filter(x => x.id !== p.id)].slice(0, 30)));
+    return true;
+  } catch { return false; } };
+  const forgetPendingPayment = id => { try { localStorage.setItem('qo_payments', JSON.stringify(getPendingPayments().filter(p => p.id !== id))); } catch {} };
+  const paymentUrl = (id, token = '') => 'pay.html?id=' + encodeURIComponent(id) + (token ? '#token=' + encodeURIComponent(token) : '');
 
   // ===== Khiếu nại đơn hàng (FR-26) =====
   // Hộp thoại dùng chung: khách có tài khoản gọi {orderId}; khách ẩn danh gọi thêm {token} (mã riêng của đơn lưu trên thiết bị).
@@ -125,9 +140,9 @@ const QO = (() => {
   // Mục quản lý của chủ quán chỉ hiện khi phiên đăng nhập là chủ quán.
   const SECTIONS = {
     customer: [['customer/home.html', 'Gọi món tại bàn'], ['customer/cart.html', 'Giỏ hàng'], ['customer/orders.html', 'Đơn hàng'], ['customer/history.html', 'Lịch sử'], ['customer/profile.html', 'Hồ sơ']],
-    merchant: [['merchant/dashboard.html', 'Tổng quan'], ['merchant/orders.html', 'Đơn hàng'], ['merchant/menu.html', 'Thực đơn'], ['merchant/tables.html', 'Bàn & QR'], ['merchant/bills.html', 'Tính tiền bàn'], ['merchant/revenue.html', 'Doanh thu'], ['merchant/coupons.html', 'Mã giảm giá'], ['merchant/reviews.html', 'Đánh giá'], ['merchant/complaints.html', 'Khiếu nại'], ['merchant/shop.html', 'Hồ sơ quán']]
+    merchant: [['merchant/dashboard.html', 'Tổng quan'], ['merchant/orders.html', 'Đơn hàng'], ['merchant/menu.html', 'Thực đơn'], ['merchant/tables.html', 'Bàn & QR'], ['merchant/bills.html', 'Tính tiền bàn'], ['merchant/revenue.html', 'Doanh thu'], ['merchant/coupons.html', 'Mã giảm giá'], ['merchant/reviews.html', 'Đánh giá'], ['merchant/complaints.html', 'Khiếu nại'], ['merchant/shop.html#bank-section', 'Ngân hàng & thanh toán'], ['merchant/shop.html', 'Hồ sơ quán']]
   };
-  const linkTo = ([p, t]) => `<a href="${rootUrl()}${p}"${location.pathname.endsWith('/' + p) ? ' class="on" aria-current="page"' : ''}>${t}${p === 'customer/cart.html' ? '<span class="badge-n" id="cart-n"></span>' : ''}</a>`;
+  const linkTo = ([p, t]) => `<a href="${rootUrl()}${p}"${location.pathname.endsWith('/' + p) ? ' class="on" aria-current="page"' : ''}>${t}${p === 'customer/cart.html' ? '<span class="badge-n" id="cart-n" hidden></span>' : ''}</a>`;
   const guestLinks = () => `<a href="${rootUrl()}merchant/login.html">Đăng nhập</a><a href="${rootUrl()}merchant/login.html?mode=register">Đăng ký tài khoản</a>`;
   const closeMenus = () => document.querySelectorAll('.dd.open').forEach(d => { d.classList.remove('open'); d.querySelector('.dd-btn').setAttribute('aria-expanded', 'false'); });
 
@@ -159,7 +174,7 @@ const QO = (() => {
           <div class="dd-panel"><div class="dd-box"><p class="dd-desc" id="mer-desc">Đăng nhập để quản lý quán của bạn.</p><div class="dd-links" id="mer-links">${guestLinks()}</div></div></div>
         </div>
       </nav>
-      <a class="cart-pill${cartOn}" href="${cartHref}" aria-label="Giỏ hàng">🛒 <span class="cart-label">Giỏ hàng</span><span class="badge-n"></span></a>
+      <a class="cart-pill${cartOn}" href="${cartHref}" aria-label="Giỏ hàng">🛒 <span class="cart-label">Giỏ hàng</span><span class="badge-n" hidden></span></a>
       <div class="acct" id="acct" hidden><span id="who"></span><button type="button" id="logout">Đăng xuất</button></div>
     </div></header>`);
 
@@ -177,5 +192,5 @@ const QO = (() => {
 
   return {api, all, get, by, put, del, isOpenNow, isAccepting, isOrderable, validateSelection, qrUrl, STATUS, ORDER_STATUS, PAY_METHOD,
     esc, money, norm, hash, toast, param, newRequestId, parseTime, fmtTime, tableLabel, session, logout, requireOwner, myShop, getCart, setCart, getGuest, setGuest, clearGuest,
-    getOrders, saveOrders, addOrder, orderTrackingUrl, complaintDialog, COMPLAINT_STATUS, header};
+    getOrders, saveOrders, addOrder, orderTrackingUrl, getPendingPayments, savePendingPayment, forgetPendingPayment, paymentUrl, complaintDialog, COMPLAINT_STATUS, header};
 })();

@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="vi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer"><title>Thanh toán chuyển khoản - QuickOrder</title>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/style.css"><link rel="stylesheet" href="../css/customer-checkout.css"><script src="../js/app.js"></script></head><body>
+<main class="wrap payment-page"><a class="meta" href="orders.html">← Đơn hàng của bạn</a>
+<h1>Thanh toán chuyển khoản</h1>
+<p class="sub">Đơn sẽ gửi đến quán khi thanh toán được xác nhận.</p>
+<p class="err" id="payment-error" role="alert" hidden></p>
+<div id="payment-root" aria-live="polite"><div class="empty">Đang tải thông tin thanh toán...</div></div>
+<div class="payment-tools">
+  <button class="btn ghost" id="check-payment" type="button" disabled>Kiểm tra thanh toán</button>
+  <p class="meta checkout-note" id="payment-updated">Đang tải trạng thái…</p>
+</div>
+</main><script src="../js/payment.js"></script></body></html>

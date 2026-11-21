@@ -1,5 +1,11 @@
-<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Thực đơn - QuickOrder</title><link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="../css/style.css"><script src="../js/app.js"></script></head><body>
-<div class="wrap" id="root"></div>
+<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Thực đơn - QuickOrder</title><link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="../css/style.css"><link rel="stylesheet" href="../css/customer-checkout.css"><script src="../js/app.js"></script></head><body>
+<main class="wrap menu-page" id="root"><p class="sub">Đang tải thực đơn…</p></main>
+<aside class="cart-dock" id="cart-dock" aria-label="Giỏ hàng" hidden>
+  <div class="row cart-dock-inner">
+    <div aria-live="polite"><span class="meta" id="cart-dock-count"></span><strong class="cart-dock-price" id="cart-dock-total"></strong></div>
+    <a class="btn" href="cart.html">Xem giỏ hàng</a>
+  </div>
+</aside>
 <dialog id="dlg"><form method="dialog" id="f"><h2 id="dn"></h2><div id="gs"></div><div class="err" id="er"></div><div class="row" style="margin-top:12px"><button class="btn ghost" value="x">Hủy</button><button class="btn" id="ok" value="ok">Thêm vào giỏ</button></div></form></dialog>
 <script>
 QO.header('customer');
@@ -21,6 +27,14 @@ QO.header('customer');
   const optsOf = g => oAll.filter(o => o.group_id === g.id);
   const accepting = QO.isAccepting(shop);
   let q = QO.param('q') || '', cat = 0, cur = null;
+  const updateCartDock = () => {
+    const c = QO.getCart();
+    const items = c.shop_id === shop.id && c.table === table ? c.items : [];
+    document.getElementById('cart-dock').hidden = !scanOk || !items.length;
+    document.getElementById('cart-dock-count').textContent = items.reduce((n, i) => n + i.qty, 0) + ' phần trong giỏ';
+    const total = items.reduce((n, i) => n + (i.price + i.options.reduce((extra, o) => extra + o.extra_price, 0)) * i.qty, 0);
+    document.getElementById('cart-dock-total').textContent = QO.money(total);
+  };
 
   const [label, tone] = accepting ? ['Đang nhận món', 'ok'] : ['Quán tạm ngưng nhận món', 'no'];
   root.innerHTML = `
@@ -40,10 +54,10 @@ QO.header('customer');
 
   const card = d => {
     const ok = QO.isOrderable(d), gs = groupsOf(d);
-    const hint = gs.length ? gs.map(g => QO.esc(g.name)).join(', ') : 'Không có tùy chọn';
+    const hint = gs.map(g => QO.esc(g.name)).join(', ');
     return `<div class="item${ok ? '' : ' off'}">
-      <div><h3>${QO.esc(d.name)}</h3><div class="meta">${hint}</div></div>
-      <div class="acts"><span class="price">${QO.money(d.price)}</span>${ok ? `<button class="btn sm" data-add="${d.id}"${accepting && scanOk ? '' : ' disabled'}>Thêm</button>` : '<span class="tag no">Hết món</span>'}</div>
+      <div><h3>${QO.esc(d.name)}</h3>${gs.length ? `<div class="meta">${hint}</div>` : ''}</div>
+      <div class="acts menu-actions"><span class="price">${QO.money(d.price)}</span>${ok ? `<button class="btn sm" data-add="${d.id}" aria-label="Thêm ${QO.esc(d.name)} vào giỏ"${accepting && scanOk ? '' : ' disabled'}>Thêm</button>` : '<span class="tag no">Hết món</span>'}</div>
     </div>`;
   };
 
@@ -74,7 +88,7 @@ QO.header('customer');
     const ex = c.items.find(i => i.key === key);
     if (ex) ex.qty++;
     else c.items.push({key, dish_id: d.id, name: d.name, price: d.price, options: picked.map(o => ({id: o.id, name: o.name, extra_price: o.extra_price})), qty: 1});
-    QO.setCart(c); QO.toast('Đã thêm ' + d.name);
+    QO.setCart(c); updateCartDock(); QO.toast('Đã thêm ' + d.name);
   };
 
   menuEl.onclick = e => {
@@ -98,5 +112,9 @@ QO.header('customer');
   };
 
   draw();
-})();
+  updateCartDock();
+  window.addEventListener('pageshow', updateCartDock);
+})().catch(() => {
+  document.getElementById('root').innerHTML = '<div class="empty"><b>Chưa tải được thực đơn</b><p>Kiểm tra kết nối rồi tải lại trang.</p></div>';
+});
 </script></body></html>

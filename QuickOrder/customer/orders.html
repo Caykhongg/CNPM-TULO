@@ -4,6 +4,7 @@
   <p class="sub">Trạng thái tự cập nhật. Danh sách này lưu trên thiết bị bạn đang dùng. <a href="history.html">Xem lịch sử tài khoản hoặc lưu đơn đã đặt trước khi đăng nhập</a>.</p>
   <p class="err" id="history-warning" role="alert" hidden>Đơn đã gửi thành công nhưng chưa lưu vào tài khoản vì phiên đăng nhập đã thay đổi. Hãy đăng nhập tài khoản khách, mở <a href="history.html">Lịch sử</a> và chọn “Lưu vào lịch sử” cho đơn vừa đặt.</p>
   <div class="row"><span class="meta" id="orders-updated" role="status" aria-live="polite">Đang tải trạng thái...</span><button class="btn ghost sm" type="button" id="refresh-orders">Tải lại</button></div>
+  <section id="pending-payments" hidden style="margin:16px 0"></section>
   <div class="chips" id="chips" aria-label="Lọc theo trạng thái"></div>
   <div id="list" style="margin-top:14px"><div class="empty"><b>Đang tải...</b></div></div>
 </div>
@@ -138,7 +139,7 @@ document.getElementById('history-warning').hidden = QO.param('history') !== 'mis
     }
     const b = e.target.closest('[data-cancel]'); if (!b) return;
     if (loading || cancelling) return;
-    if (!confirm('Hủy đơn này?')) return;
+    if (!confirm('Hủy đơn này?' + (cache.get(Number(b.dataset.cancel))?.payment_method === 'TRANSFER' && cache.get(Number(b.dataset.cancel))?.payment_status === 'PAID' ? ' Đơn đã trả tiền; quán sẽ cần xử lý hoàn tiền riêng.' : ''))) return;
     const saved = QO.getOrders().find(x => x.id === Number(b.dataset.cancel));
     if (!saved) return;
     cancelling = true; b.disabled = true;
@@ -176,4 +177,4 @@ document.getElementById('history-warning').hidden = QO.param('history') !== 'mis
   await tick();
 })();
 </script>
-</body></html>
+<script src="../js/pending-payments.js"></script></body></html>

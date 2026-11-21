@@ -92,7 +92,7 @@ dialog::backdrop{background:#14213d88}
 .cart-pill{display:inline-flex;align-items:center;gap:6px;font:inherit;font-weight:600;font-size:14px;color:#dfe5f1;background:#243360;border-radius:99px;padding:8px 16px;white-space:nowrap;transition:background .15s,color .15s}
 .cart-pill:hover{background:#2f3f6e;color:#fff}
 .cart-pill.on{background:var(--acc);color:var(--ink)}
-.cart-pill .badge-n{background:var(--bad);color:#fff;border-radius:99px;font-size:11px;padding:1px 7px;display:none}
+.cart-pill .badge-n{margin-left:0}
 .dd-btn:focus-visible,.dd-links a:focus-visible,.acct button:focus-visible,.cart-pill:focus-visible,.logo:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 @keyframes ddIn{from{opacity:0;transform:translateY(-4px)}}
 @media(hover:hover){.dd:hover .dd-panel{display:block}}

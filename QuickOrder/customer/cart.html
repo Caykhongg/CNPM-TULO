@@ -1,29 +1,36 @@
-<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Giỏ hàng - QuickOrder</title><link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="../css/style.css"><script src="../js/app.js"></script></head><body>
-<div class="wrap">
+<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Giỏ hàng - QuickOrder</title><link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="../css/style.css"><link rel="stylesheet" href="../css/customer-checkout.css"><script src="../js/app.js"></script></head><body>
+<main class="wrap checkout-page">
   <a class="meta" id="back" href="home.html">← Tiếp tục chọn món</a>
   <h1 style="margin-top:8px">Giỏ hàng</h1>
   <p class="sub" id="from"></p>
   <div class="cart-grid">
-    <section id="box"></section>
-    <aside class="card" id="checkout">
-      <h2>Tóm tắt</h2>
-      <div id="sum"></div>
-      <div class="field" style="margin-top:14px"><span>Mã giảm giá</span>
-        <div class="row" style="gap:8px"><input id="cp" maxlength="20" placeholder="Nhập mã" autocomplete="off" style="text-transform:uppercase;flex:1;min-width:0"><button class="btn ghost sm" type="button" id="cpok">Áp dụng</button></div>
-        <div class="meta" id="cpmsg" style="margin-top:6px" role="status"></div></div>
-      <h2 style="margin-top:20px">Nhận món</h2>
-      <p class="meta" id="where" style="margin:0 0 12px"></p>
-      <label class="field"><span>Họ tên</span><input name="name" autocomplete="name" maxlength="60" placeholder="Tên người gọi món"></label>
-      <div class="field"><span>Thanh toán</span><div class="chips" id="pays" style="margin:0"></div></div>
-      <div class="meta" id="pay" style="margin:-4px 0 12px"></div>
-      <label class="field"><span>Ghi chú</span><textarea name="note" rows="2" maxlength="300" placeholder="VD: ít đá, không hành"></textarea></label>
-      <div class="err" id="err"></div>
-      <button class="btn" type="button" id="order" disabled style="width:100%">Đặt hàng</button>
-      <p class="meta" style="margin-top:10px">Đặt thành công sẽ mở trang theo dõi đơn. Bạn cũng xem lại ở mục Đơn hàng.</p>
-      <p class="meta" id="history-note" role="status"></p>
+    <section id="box" aria-label="Món trong giỏ"><p class="sub">Đang tải giỏ hàng…</p></section>
+    <aside class="card" id="checkout" aria-label="Đặt món" hidden>
+      <div>
+        <h2>Thông tin nhận món</h2>
+        <p class="meta" id="where"></p>
+        <label class="field"><span>Tên người gọi (không bắt buộc)</span><input name="name" autocomplete="name" maxlength="60" placeholder="Tên của bạn"></label>
+        <label class="field"><span>Ghi chú (không bắt buộc)</span><textarea name="note" rows="2" maxlength="300" placeholder="Ví dụ: ít đá, không hành"></textarea></label>
+      </div>
+      <div>
+        <h2 id="pay-title">Chọn cách thanh toán</h2>
+        <div class="payment-choices" id="pays" role="group" aria-labelledby="pay-title"></div>
+        <p class="meta checkout-note" id="pay"></p>
+      </div>
+      <details>
+        <summary>Có mã giảm giá?</summary>
+        <div class="row checkout-note"><input id="cp" maxlength="20" placeholder="Nhập mã" aria-label="Mã giảm giá" autocomplete="off" style="text-transform:uppercase;flex:1;min-width:0"><button class="btn ghost sm" type="button" id="cpok">Áp dụng</button></div>
+        <div class="meta checkout-note" id="cpmsg" role="status"></div>
+      </details>
+      <div>
+        <div id="sum"></div>
+        <div class="err checkout-note" id="err" role="alert"></div>
+        <button class="btn" type="button" id="order" disabled>Gửi đơn</button>
+        <p class="meta checkout-note" id="history-note"></p>
+      </div>
     </aside>
   </div>
-</div>
+</main>
 <dialog id="edlg"><form method="dialog"><h2 id="edn"></h2><div id="egs"></div><div class="err" id="eer"></div>
   <div class="row" style="margin-top:12px"><button class="btn ghost" value="x">Hủy</button><button class="btn" id="eok" value="ok">Lưu</button></div></form></dialog>
 <script>
@@ -33,7 +40,7 @@ QO.header('customer');
   const checkout = document.getElementById('checkout'), paysEl = document.getElementById('pays'), payEl = document.getElementById('pay');
   const whereEl = document.getElementById('where'), errEl = document.getElementById('err'), orderBtn = document.getElementById('order');
   const nameEl = document.querySelector('input[name="name"]'), noteEl = document.querySelector('textarea[name="note"]');
-  const PAYS = [['CASH', 'Tiền mặt'], ['TRANSFER', 'Chuyển khoản / QR']];
+  const PAYS = [['CASH', 'Tiền mặt', 'Trả tiền tại quán'], ['TRANSFER', 'Quét QR chuyển khoản', 'Trả trước qua ứng dụng ngân hàng']];
   let shop = null, tb = null, method = 'CASH', sending = false, requestId = '';
   let coupon = '', quote = null;                    // mã đang áp dụng và kết quả tính thử của server (giảm giá do server tính)
   const cpEl = document.getElementById('cp'), cpMsg = document.getElementById('cpmsg'), cpBtn = document.getElementById('cpok');
@@ -44,15 +51,7 @@ QO.header('customer');
   const line = i => (i.price + i.options.reduce((s, o) => s + o.extra_price, 0)) * i.qty;
 
   const renderPay = () => {
-    if (method !== 'TRANSFER') { payEl.textContent = 'Thanh toán tiền mặt khi nhận món hoặc tại quầy.'; return; }
-    if (!shop) { payEl.textContent = ''; return; }
-    const info = shop.bank_account_number ? 'Số tài khoản: ' + QO.esc(shop.bank_account_number) : 'Quán chưa cập nhật số tài khoản.';
-    const img = shop.payment_qr_image || '';
-    // Ảnh do quán tải lên (/uploads/...) hiện ngay; chỉ cho phép liên kết http(s) để tránh javascript: từ dữ liệu quán
-    const qr = /^\/uploads\/[0-9a-f]{32}\.(png|jpg|webp)$/.test(img)
-      ? `<div style="margin-top:8px"><img src="${QO.esc(img)}" alt="Mã QR chuyển khoản của quán" style="max-width:220px;width:100%;border:1px solid var(--line);border-radius:10px"></div>`
-      : /^https?:\/\//i.test(img) ? ` · <a href="${QO.esc(img)}" target="_blank" rel="noopener">Xem mã QR</a>` : '';
-    payEl.innerHTML = info + qr;
+    payEl.textContent = method === 'TRANSFER' ? 'Đơn gửi đến quán sau khi khoản chuyển được xác nhận.' : 'Đơn gửi đến quán ngay khi bạn bấm Gửi đơn.';
   };
 
   const renderSum = (total, count) => {
@@ -63,11 +62,23 @@ QO.header('customer');
       <div class="row" style="margin-top:12px"><b>Tổng cộng</b><span class="price" style="font-size:20px">${QO.money(total - d)}</span></div>`;
   };
 
+  let quoting = false;
+  const updateOrderButton = () => {
+    const accepting = !!shop && QO.isAccepting(shop);
+    orderBtn.disabled = sending || quoting || !tb || !accepting;
+    if (!tb) orderBtn.textContent = 'Cần quét mã QR của bàn';
+    else if (!accepting) orderBtn.textContent = 'Quán tạm ngưng nhận món';
+    else if (sending || quoting) orderBtn.textContent = sending ? 'Đang xử lý…' : 'Đang kiểm tra mã giảm giá…';
+    else orderBtn.textContent = method === 'TRANSFER' ? 'Hiện mã QR thanh toán' : 'Gửi đơn · Trả tiền mặt';
+  };
+
   // Hỏi server giảm bao nhiêu cho giỏ hiện tại; giỏ đổi thì tính lại, mã hết hợp lệ thì bỏ mã và báo lý do
   let qSeq = 0;
   const requote = async (c = QO.getCart(), say = false) => {
-    if (!coupon || !c.items.length) { quote = null; return; }
     const seq = ++qSeq;
+    if (!coupon || !c.items.length) { quote = null; quoting = false; updateOrderButton(); return; }
+    quoting = true;
+    updateOrderButton();
     try {
       const r = await QO.api('POST', 'orders/quote', {shop_id: c.shop_id, coupon_code: coupon,
         items: c.items.map(i => ({dish_id: i.dish_id, quantity: i.qty, option_ids: i.options.map(o => o.id)}))});
@@ -77,9 +88,12 @@ QO.header('customer');
       if (seq !== qSeq) return;
       quote = null; coupon = ''; cpMsg.textContent = e.message;
     }
+    quoting = false;
     renderSum(c.items.reduce((s, i) => s + line(i), 0), c.items.reduce((s, i) => s + i.qty, 0));
+    updateOrderButton();
   };
   cpBtn.onclick = () => {
+    if (sending) return;
     coupon = cpEl.value.trim().toUpperCase(); quote = null;
     if (!coupon) { cpMsg.textContent = ''; draw(); return; }
     cpMsg.textContent = 'Đang kiểm tra...'; requote();
@@ -93,11 +107,14 @@ QO.header('customer');
     from.textContent = shop ? 'Quán: ' + shop.name : '';
 
     if (!c.items.length) {
+      qSeq++;
+      quoting = false;
+      quote = null;
       box.innerHTML = `<div class="empty"><b>Giỏ hàng trống</b><a class="btn" href="${back}">Chọn món</a></div>`;
-      checkout.style.display = 'none';
+      checkout.hidden = true;
       return;
     }
-    checkout.style.display = '';
+    checkout.hidden = false;
 
     const total = c.items.reduce((s, i) => s + line(i), 0), count = c.items.reduce((s, i) => s + i.qty, 0);
     box.innerHTML = '<div class="list">' + c.items.map(i => `
@@ -114,18 +131,22 @@ QO.header('customer');
       </div>`).join('') + '</div><div style="margin-top:12px"><button class="btn ghost sm" type="button" id="clear">Xóa toàn bộ giỏ</button></div>';
 
     renderSum(total, count);
-    requote(c);
+    if (!sending) requote(c);
 
     whereEl.innerHTML = tb ? `Tại bàn: <b>${QO.esc(QO.tableLabel(tb.table_number))}</b>` : 'Chưa xác định bàn. Hãy dùng camera điện thoại quét lại mã QR trên bàn.';
-    paysEl.innerHTML = PAYS.map(([v, t]) => `<button type="button" class="chip${method === v ? ' on' : ''}" data-pay="${v}">${t}</button>`).join('');
+    const payButtons = paysEl.querySelectorAll?.('[data-pay]');
+    if (!payButtons?.length) {
+      paysEl.innerHTML = PAYS.map(([v, title, description]) => `<button type="button" data-pay="${v}" aria-pressed="${method === v}"><strong>${title}</strong><span class="meta">${description}</span></button>`).join('');
+    } else {
+      payButtons.forEach(b => b.setAttribute('aria-pressed', String(b.dataset.pay === method)));
+    }
     renderPay();
 
-    const accepting = !!shop && QO.isAccepting(shop);
-    orderBtn.disabled = sending || !tb || !accepting;
-    orderBtn.textContent = sending ? 'Đang gửi...' : (shop && !accepting ? 'Quán tạm ngưng nhận món' : 'Đặt hàng');
+    updateOrderButton();
   };
 
   box.onclick = e => {
+    if (sending) return;
     if (e.target.closest('#clear')) {
       if (!confirm('Xóa toàn bộ món trong giỏ?')) return;
       const c = QO.getCart(); c.items = []; QO.setCart(c); draw(); return;
@@ -161,14 +182,14 @@ QO.header('customer');
     if (same) { same.qty += cur.qty; c.items = c.items.filter(x => x !== cur); }
     QO.setCart(c); draw();
   };
-  paysEl.onclick = e => { const b = e.target.closest('[data-pay]'); if (b) { method = b.dataset.pay; draw(); } };
+  paysEl.onclick = e => { const b = e.target.closest('[data-pay]'); if (b && !sending) { method = b.dataset.pay; draw(); } };
 
   orderBtn.onclick = async () => {
-    if (sending) return;                          // chặn bấm đúp (NFR-31)
+    if (sending || quoting) return;
     const c = QO.getCart();
     errEl.textContent = '';
     if (!c.items.length || !tb || !shop || !QO.isAccepting(shop)) return;
-    sending = true; draw();
+    sending = true; updateOrderButton();
     let order;
     // Mã chống gửi trùng: giữ nguyên khi lỗi mạng (gửi lại không tạo đơn thứ hai), đổi mới khi server đã trả lời lỗi.
     if (!requestId) requestId = QO.newRequestId();
@@ -191,6 +212,12 @@ QO.header('customer');
       return;
     }
     requestId = '';
+    if (order.kind === 'PAYMENT_CHECKOUT') {
+      const stored = QO.savePendingPayment({id: order.id, token: order.access_token, shop_name: shop.name, cart: JSON.stringify(c)});
+      // Chưa thanh toán nên giữ giỏ; không thêm vào danh sách đơn bếp.
+      location.href = new URL(QO.paymentUrl(order.id, stored ? '' : order.access_token), location.href).href;
+      return;
+    }
     // Tách lỗi lưu trên thiết bị khỏi lỗi gửi đơn: đơn đã tạo thì chuyển tới theo dõi.
     const saved = QO.addOrder({id: order.id, token: order.access_token, shop_id: order.shop_id, shop_name: shop.name, table_number: tb.table_number});
     try { QO.setCart({shop_id: null, table: null, items: []}); } catch {}
@@ -213,7 +240,7 @@ QO.header('customer');
   const who = await QO.session();
   document.getElementById('history-note').innerHTML = who && who.role === 'customer'
     ? `Đơn sẽ được lưu vào lịch sử tài khoản ${QO.esc(who.full_name || who.email)}.`
-    : 'Bạn đang đặt đơn ngoài tài khoản khách. Đơn lưu trên thiết bị này; <a href="account.html">đăng nhập tài khoản khách</a> để lưu lịch sử trên mọi thiết bị.';
+    : 'Bạn có thể đặt với tư cách khách. <a href="account.html">Đăng nhập</a> nếu muốn lưu đơn vào lịch sử tài khoản.';
   const profile = who && who.role === 'customer' ? who : QO.getGuest();
   if (profile && nameEl && !nameEl.value) nameEl.value = profile.full_name || '';
 
@@ -224,5 +251,8 @@ QO.header('customer');
   } catch {}                                                                  // lỗi mạng: giỏ vẫn dùng được, chỉ không có nút Sửa
 
   draw();
-})();
+  window.addEventListener('pageshow', e => { if (e.persisted) location.reload(); });
+})().catch(() => {
+  document.getElementById('box').innerHTML = '<div class="empty"><b>Chưa tải được giỏ hàng</b><p>Kiểm tra kết nối rồi tải lại trang.</p></div>';
+});
 </script></body></html>

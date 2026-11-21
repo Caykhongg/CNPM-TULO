@@ -3,6 +3,7 @@
   <h1>Lịch sử đơn hàng</h1>
   <p class="sub" id="sub">Các đơn bạn đã gọi khi đăng nhập, trên mọi thiết bị.</p>
   <div id="note" role="status"></div>
+  <section id="pending-payments" hidden style="margin:16px 0"></section>
   <div class="chips" id="chips" aria-label="Lọc theo trạng thái" hidden></div>
   <div id="list"><div class="empty"><b>Đang tải...</b></div></div>
   <div id="more" style="margin-top:14px;text-align:center" hidden><button class="btn ghost" type="button" id="moreBtn">Xem thêm đơn cũ hơn</button></div>
@@ -160,4 +161,4 @@ QO.header('customer');
   document.addEventListener('visibilitychange', () => { if (!document.hidden) load(); });
 })();
 </script>
-</body></html>
+<script src="../js/pending-payments.js"></script></body></html>
