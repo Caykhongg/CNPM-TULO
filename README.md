@@ -6,7 +6,7 @@
 ![Python](https://img.shields.io/badge/Python-3.10+-blue)
 ![Flask](https://img.shields.io/badge/Flask-3.x-lightgrey)
 ![SQLite](https://img.shields.io/badge/SQLite-3-green)
-![Status](https://img.shields.io/badge/Status-Hoàn%20thành%20Sprint%204-brightgreen)
+![Status](https://img.shields.io/badge/Status-Hoàn%20thành%20Sprint%205-brightgreen)
 
 ---
 
@@ -36,6 +36,7 @@
 - Mỗi bàn có **một mã QR**. Khách ngồi tại quán quét mã bằng điện thoại, xem menu và gọi món, **không cần cài ứng dụng, không cần đăng nhập**.
 - Đơn được gửi **thẳng đến quầy/bếp**. Chủ quán nhận đơn, cập nhật trạng thái và theo dõi doanh thu ngay trên hệ thống.
 - **Không thu phí hoa hồng** cho nền tảng trung gian.
+- Hỗ trợ **thanh toán chuyển khoản qua VietQR** với đối soát tự động hoặc chủ quán xác nhận thủ công (FR-27).
 - Hệ thống chỉ phục vụ **khách ăn tại quán**, không có đặt hàng từ xa hay giao hàng.
 
 ## 🔄 Luồng hoạt động
@@ -78,7 +79,7 @@ flowchart LR
 - **Gợi ý món** ở đầu menu: món bán chạy của quán và món bạn hay gọi (khi có tài khoản)
 - **Nhập mã giảm giá** ở giỏ hàng, xem tổng tiền sau giảm trước khi gửi đơn
 - Gửi đơn thẳng đến quầy bếp; gọi thêm món bất cứ lúc nào
-- Thanh toán bằng tiền mặt tại quầy hoặc chuyển khoản/QR
+- Thanh toán **tiền mặt** tại quầy hoặc **chuyển khoản VietQR**: mã QR điền sẵn số tiền và mã chuyển khoản riêng (dạng `QO…`); giá được tính lại ở máy chủ; đơn chỉ được gửi đến quán sau khi tiền về hoặc chủ quán xác nhận; xem lại các phiếu thanh toán của mình
 - Theo dõi trạng thái đơn: *Chờ xác nhận → Đang làm → Hoàn thành*; hủy đơn khi chưa được xác nhận
 - **Đánh giá** quán và từng món sau khi đơn hoàn thành (mỗi đơn một lần)
 - **Gửi khiếu nại** về một đơn và xem phản hồi của quán ngay trong đơn đó
@@ -88,7 +89,9 @@ flowchart LR
 - Đăng ký quán, quản lý thông tin quán và giờ mở cửa
 - **Quản lý bàn và tạo mã QR** cho từng bàn
 - Quản lý menu: thêm, sửa, xóa món, hình ảnh, giá, tùy chọn, đánh dấu hết món
-- Cấu hình thông tin nhận chuyển khoản: số tài khoản và ảnh QR thanh toán (tải ảnh lên)
+- **Cấu hình nhận chuyển khoản** (FR-27): chọn ngân hàng, nhập số tài khoản và token/URL xAPI ngay trên web, có nút kiểm tra kết nối. Không nhập token thì chạy chế độ **thủ công** (chủ quán xác nhận); kết nối xAPI hợp lệ thì chạy chế độ **tự động** đối soát. Token được mã hóa ở máy chủ, không trả về trình duyệt
+- **Phiếu thanh toán và biên lai:** xem phiếu chờ, xác nhận thủ công, xem biên lai nhận tiền; biên lai lệch tiền hoặc không khớp vào trạng thái **REVIEW** để chủ quán xử lý; chống trùng biên lai
+- Vẫn có thể tải ảnh QR thanh toán lên (cách cũ)
 - **Nhận thông báo đơn mới** (số đơn chờ trên tiêu đề trang, âm báo tùy chọn), lọc đơn theo trạng thái và ngày, xác nhận hoặc từ chối đơn (kèm lý do), cập nhật trạng thái đơn
 - Xác nhận thanh toán; **tính tiền theo bàn** (xem các đơn chưa trả của bàn và thu một lần)
 - Thống kê doanh thu theo ngày/tháng và món bán chạy (chỉ tính đơn đã hoàn thành, ngày theo giờ Việt Nam)
@@ -107,6 +110,7 @@ flowchart LR
 - **Gọi món bằng QR tại bàn:** khách quét là gọi, không cần app, không cần đăng ký
 - **Thông báo đơn mới** cho chủ quán: trang tự kiểm tra mỗi 7 giây, không cần tải lại
 - **Không thu hoa hồng**
+- **Thanh toán chuyển khoản VietQR tự động đối soát** qua xAPI, kèm chế độ thủ công khi quán chưa kết nối ngân hàng
 - **Gợi ý món hay đặt** dựa trên đơn đã hoàn thành của quán và lịch sử của khách có tài khoản
 - **Quản lý mã giảm giá và tính tiền theo bàn** ngay trên trang chủ quán
 
@@ -116,7 +120,7 @@ flowchart LR
 |---|---|
 | **Bắt buộc** (làm trước) | Đăng ký, đăng nhập, phân quyền (chủ quán, admin); quản lý bàn và QR; quản lý menu; quét QR, xem menu, giỏ hàng, gửi đơn; xử lý và cập nhật trạng thái đơn; xác nhận thanh toán |
 | **Nâng cao** (nếu còn thời gian) | Thống kê doanh thu, mã giảm giá, đánh giá món, tính tiền theo bàn, lịch sử đơn cho khách có tài khoản, trang Admin hoàn chỉnh |
-| **Mở rộng** (ngoài kế hoạch) | Thanh toán trực tuyến qua cổng thanh toán |
+| **Mở rộng** | Thanh toán chuyển khoản VietQR có đối soát tự động (FR-27) — ✅ đã hoàn thành sau Sprint 4 (PR #68, 21/11/2026) |
 
 ### ⚙️ Yêu cầu phi chức năng
 - Giao diện responsive, ưu tiên điện thoại (khách dùng điện thoại để quét QR)
@@ -128,13 +132,14 @@ flowchart LR
 
 | Thành phần | Công nghệ |
 |---|---|
-| Backend | Python, Flask (API JSON, phiên đăng nhập phía server); mã tách theo nhóm: `app.py`, `admin_api.py`, `complaint_api.py` |
+| Backend | Python, Flask (API JSON, phiên đăng nhập phía server); mã tách theo nhóm: `app.py`, `admin_api.py`, `complaint_api.py`, `payment_api.py`, `owner_bank_api.py` |
 | Frontend | HTML, CSS, JavaScript thuần: các trang tĩnh gọi API bằng `fetch` |
 | Cơ sở dữ liệu | SQLite, dùng thư viện `sqlite3` có sẵn của Python (không dùng ORM); cấu trúc bảng trong `schema.sql` |
 | Biểu đồ | Chart.js (nạp từ CDN) |
 | Mã QR | `qrcode.js` (nạp từ CDN, tạo mã QR ngay trên trình duyệt chủ quán) |
 | Gửi email xác nhận | Brevo (API), đọc cấu hình từ biến môi trường hoặc file `.env` (`python-dotenv`) |
-| Kiểm thử | `unittest` (có sẵn trong Python) |
+| Thanh toán chuyển khoản | VietQR (QR điền sẵn số tiền), xAPI để đối soát giao dịch, thư viện `cryptography` (Fernet) để mã hóa token ngân hàng |
+| Kiểm thử | `unittest` (có sẵn trong Python), `node --test` cho logic JavaScript |
 | Quản lý mã nguồn | Git, GitHub |
 | Quản lý công việc | Trello / GitHub Projects |
 | Thiết kế | Figma, draw.io |
@@ -148,22 +153,30 @@ CNPM-TULO/
 │   ├── app.py                   # Flask: API (tài khoản, quán, menu, bàn, đơn hàng, mã giảm giá, đánh giá, lịch sử, doanh thu) và phục vụ trang tĩnh
 │   ├── admin_api.py             # API quản trị viên: người dùng, thống kê toàn hệ thống (FR-52, FR-54)
 │   ├── complaint_api.py         # API khiếu nại dành cho chủ quán (FR-55)
-│   ├── schema.sql               # Cấu trúc cơ sở dữ liệu SQLite
+│   ├── payment_api.py           # API thanh toán chuyển khoản: phiếu, kiểm tra, xác nhận, biên lai, đối soát (FR-27)
+│   ├── owner_bank_api.py        # API chủ quán cấu hình ngân hàng nhận tiền, kiểm tra kết nối
+│   ├── xapi_client.py           # Gọi xAPI để lấy giao dịch ngân hàng
+│   ├── bank_connections.py      # Danh mục ngân hàng, kết nối và mã hóa token
+│   ├── bank_catalog.json        # Danh sách ngân hàng hỗ trợ
+│   ├── reconcile_payments.py    # Đối soát giao dịch với phiếu thanh toán
+│   ├── check_xapi.py            # Kiểm tra kết nối xAPI
+│   ├── diagnose_xapi.py         # Chẩn đoán lỗi kết nối xAPI
+│   ├── seed_order_local.py      # Tạo đơn thử cục bộ để thử thanh toán
+│   ├── schema.sql               # Cấu trúc cơ sở dữ liệu SQLite (21 bảng)
 │   ├── init_db.py               # Tạo database trống (và tài khoản admin nếu đặt biến môi trường)
 │   ├── seed_data.py             # Nạp dữ liệu mẫu để chạy thử
-│   ├── mailer.py                # Gửi mã xác nhận email khi khách đăng ký
+│   ├── mailer.py                # Gửi mã xác nhận email khi khách đăng ký (Brevo)
 │   ├── check_brevo.py           # Kiểm tra cấu hình Brevo, có thể gửi một email thử
-│   ├── .env.example             # Mẫu file cấu hình `.env` (khóa Brevo, HTTPS)
-│   ├── requirements.txt         # Thư viện Python (flask, gunicorn, python-dotenv)
+│   ├── .env.example             # Mẫu file cấu hình `.env` (khóa Brevo, HTTPS, khóa thanh toán)
+│   ├── requirements.txt         # Thư viện Python (flask, gunicorn, python-dotenv, cryptography)
 │   ├── index.html               # Trang chủ
 │   ├── customer/                # Giao diện khách: menu, giỏ hàng, đơn hàng, lịch sử đơn, tài khoản, hồ sơ
 │   ├── merchant/                # Giao diện chủ quán: tổng quan, thông tin quán, menu, bàn và QR, đơn hàng, tính tiền theo bàn, mã giảm giá, đánh giá, khiếu nại, doanh thu
 │   ├── admin/                   # Giao diện quản trị: duyệt và khóa quán, người dùng, danh mục, thống kê
 │   ├── css/, js/                # Giao diện dùng chung, hàm gọi API (js/app.js, js/admin.js) và thư viện qrcode (js/vendor)
-│   └── tests/                   # Kiểm thử tự động (unittest 199 test, Node 14 test)
-├── docs/                        # Tài liệu dự án (SRS, Use Case, thiết kế, Route/API Sprint 4, danh sách chức năng...)
-├── QuickOrder_TestCases_Sprint1.docx
-├── QuickOrder_TestCases_Sprint2.docx
+│   └── tests/                   # Kiểm thử tự động (unittest 263 test, Node 26 test)
+├── docs/                        # Tài liệu dự án (SRS v1.1, Use Case, ARCHITECTURE, thiết kế, Route/API, thanh toán xAPI, kịch bản demo, hướng dẫn sử dụng...)
+├── QuickOrder_TestCase(test by Python + Playwright).xlsx   # Bộ test case tổng hợp (chạy bằng Python và Playwright)
 ├── sequence_diagram.md          # Sơ đồ tuần tự luồng đặt món và xử lý đơn (Mermaid)
 └── README.md
 ```
@@ -232,6 +245,11 @@ Khi chạy thật nên đặt `SECRET_KEY` cố định, nếu không mỗi lầ
 | `QO_DB` | Đường dẫn file database (mặc định `QuickOrder/database.db`) |
 | `QO_UPLOADS` | Thư mục lưu ảnh QR thanh toán do chủ quán tải lên (mặc định `QuickOrder/uploads`) |
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Dùng với `init_db.py` để tạo tài khoản admin (mật khẩu từ 8 ký tự) |
+| `PAYMENT_ENCRYPTION_KEY` | Khóa Fernet dùng mã hóa token ngân hàng của chủ quán. **Bắt buộc giữ cố định** khi dùng thanh toán tự động; mất khóa thì không giải mã được token đã lưu |
+| `PAYMENT_RECONCILE_SECRET` | Chuỗi bí mật bảo vệ `POST /api/internal/payments/reconcile` (đối soát từ bên ngoài) |
+| `PAYMENT_WORKER` | Mặc định `1`: tác vụ nền đối soát chạy trong server; đặt `0` để tắt |
+| `XAPI_SHOP_<id>` | *(Tùy chọn)* Cấu hình xAPI JSON của quán có mã `<id>`, thay cho cấu hình lưu trong CSDL |
+| `XAPI_ENDPOINTS_JSON` | *(Tùy chọn)* JSON bổ sung địa chỉ xAPI cho các ngân hàng |
 | `FLASK_DEBUG` | Đặt `1` để bật chế độ debug khi chạy `python app.py`; không bật trên máy chủ thật |
 
 > ⚠️ Database và thư mục ảnh tải lên nằm trên ổ đĩa của máy chủ. Nếu nơi triển khai dùng ổ đĩa tạm thời (như gói miễn phí của Render) thì dữ liệu mất khi khởi động lại hoặc triển khai lại; cần gắn ổ đĩa lưu trữ lâu dài và trỏ `QO_DB`, `QO_UPLOADS` vào đó.
@@ -240,13 +258,13 @@ Khi chạy thật nên đặt `SECRET_KEY` cố định, nếu không mỗi lầ
 
 Làm theo thứ tự này khi đưa lên máy chủ thật:
 
-1. **Ổ đĩa lưu trữ:** gắn Persistent Disk (ví dụ mount `/var/data`) rồi đặt `QO_DB=/var/data/database.db` và `QO_UPLOADS=/var/data/uploads`. Không có ổ đĩa thì database và ảnh QR thanh toán mất sau mỗi lần deploy.
+1. **Ổ đĩa lưu trữ:** gắn Persistent Disk (ví dụ mount `/var/data`) rồi đặt `QO_DB=/var/data/database.db` và `QO_UPLOADS=/var/data/uploads`. Không có ổ đĩa thì database, ảnh QR thanh toán và cấu hình ngân hàng của chủ quán mất sau mỗi lần deploy (gói miễn phí của Render dùng ổ đĩa tạm).
 2. **Lệnh chạy (Start Command):** `gunicorn app:app --workers 1`. Chỉ dùng một tiến trình vì bộ đếm đăng nhập sai nằm trong bộ nhớ.
 3. **Tạo database trống kèm admin**, không chạy `seed_data.py` (tài khoản demo có mật khẩu công khai và dữ liệu giả sẽ lẫn vào số liệu thật):
    ```bash
    ADMIN_EMAIL=<email-that> ADMIN_PASSWORD=<mat-khau-manh> python init_db.py
    ```
-4. **Biến môi trường:** `SECRET_KEY` (cố định), `HTTPS=1`, `MAIL_API_KEY`, `MAIL_FROM`, `MAIL_FROM_NAME`. Không đặt `MAIL_CONSOLE` và `FLASK_DEBUG`.
+4. **Biến môi trường:** `SECRET_KEY` (cố định), `HTTPS=1`, `MAIL_API_KEY`, `MAIL_FROM`, `MAIL_FROM_NAME`, và nếu dùng thanh toán chuyển khoản: `PAYMENT_ENCRYPTION_KEY` (cố định, giữ bí mật), `PAYMENT_RECONCILE_SECRET`. Không đặt `MAIL_CONSOLE` và `FLASK_DEBUG`.
 5. **Sao lưu** `database.db` trước mỗi lần triển khai bản mới.
 6. **Kiểm tra sau khi deploy:** mở `/api/shops` xem có quán mẫu lọt vào không, thử đăng nhập `admin@quickorder.vn` với `Demo@1234` (phải thất bại), rồi đặt thử một đơn từ mã QR, xử lý đơn và khởi động lại dịch vụ để chắc dữ liệu còn nguyên.
 
@@ -257,7 +275,7 @@ python -m unittest discover -s tests -v
 ```
 (`pytest` cũng chạy được các test này.) Kiểm thử dùng CSDL và thư mục ảnh tạm, không gửi email thật. Nếu máy có Node.js, chạy thêm kiểm thử logic trang giỏ hàng, theo dõi đơn: `node --test tests/test_customer_order_pages.cjs` (không cần cài package).
 
-Kết quả lần chạy cuối (kết thúc Sprint 4): **199 test Python và 14 test Node, tất cả đạt**.
+Kết quả lần chạy cuối (bản `main` sau khi hoàn thành FR-27, release v1.1): **263 test Python và 26 test Node, tất cả đạt**.
 
 | File test | Nội dung | Số test |
 |---|---|---|
@@ -272,7 +290,12 @@ Kết quả lần chạy cuối (kết thúc Sprint 4): **199 test Python và 14
 | `test_admin.py` | Khóa/mở khóa quán, người dùng, danh mục, thống kê (FR-51 đến FR-54) | 9 |
 | `test_categories.py` | Danh mục dùng chung và danh mục riêng của quán | 19 |
 | `test_customer_tracking.py` | Theo dõi đơn và danh sách đơn của khách | 8 |
-| `test_customer_order_pages.cjs` (Node) | Giỏ hàng, theo dõi đơn, danh sách đơn phía trình duyệt; mã chống gửi trùng | 14 |
+| `test_xapi_payments.py` | Thanh toán chuyển khoản: phiếu `QO…`, tính giá ở máy chủ, chống trùng biên lai, REVIEW, chế độ thủ công/tự động (FR-27) | 27 |
+| `test_owner_bank_connections.py` | Chủ quán cấu hình ngân hàng, mã hóa token, quyền truy cập theo quán | 23 |
+| `test_xapi_acb.py` | Đọc và đối soát giao dịch xAPI của ngân hàng ACB | 14 |
+| `test_customer_order_pages.cjs` (Node) | Giỏ hàng, theo dõi đơn, danh sách đơn, thanh toán phía trình duyệt; mã chống gửi trùng | 26 |
+
+Ngoài ra, bộ test case tổng hợp (Python và Playwright) nằm ở file `QuickOrder_TestCase(test by Python + Playwright).xlsx` tại thư mục gốc.
 
 ### Kiểm tra nhanh các chức năng Sprint 3
 
@@ -315,11 +338,13 @@ Khách hàng không cần tài khoản để gọi món: chỉ cần mở đư�
 | Chủ quán | `owner1@quickorder.vn` đến `owner6@quickorder.vn` |
 | Khách có tài khoản | `khach1@quickorder.vn` đến `khach4@quickorder.vn` |
 
-🔗 **Bản demo trực tuyến:(https://cnpm-tulo-ii3e.onrender.com/)
+🔗 **Bản demo trực tuyến:** [https://cnpm-tulo-ii3e.onrender.com/](https://cnpm-tulo-ii3e.onrender.com/)
+
+> Bản demo chạy trên gói miễn phí của Render nên lần mở đầu có thể chậm vài chục giây, và dữ liệu có thể bị đặt lại khi dịch vụ khởi động lại.
 
 ## 🔌 Các endpoint API chính
 
-Giao diện là các trang HTML tĩnh gọi API JSON dưới tiền tố `/api` (hàm `QO.api` trong `js/app.js`). Quyền truy cập kiểm tra ở phía server; khách ẩn danh dùng *mã riêng của đơn* (`access_token`, trả về một lần khi gửi đơn) để xem, hủy, đánh giá hoặc khiếu nại đơn của mình. Danh sách đầy đủ có ở mục 9 của [tài liệu Route/API](docs/RouteAPI_QuickOrder_v1.0.docx).
+Giao diện là các trang HTML tĩnh gọi API JSON dưới tiền tố `/api` (hàm `QO.api` trong `js/app.js`). Quyền truy cập kiểm tra ở phía server; khách ẩn danh dùng *mã riêng của đơn* (`access_token`, trả về một lần khi gửi đơn) để xem, hủy, đánh giá hoặc khiếu nại đơn của mình. Danh sách đầy đủ có ở mục 9 của [tài liệu Route/API](docs/RouteAPI_QuickOrder_v1.0.docx); API thanh toán chuyển khoản mô tả ở [docs/Thanh_toan_XAPI_QuickOrder.md](docs/Thanh_toan_XAPI_QuickOrder.md).
 
 | Nhóm | Endpoint | Ai dùng |
 |---|---|---|
@@ -333,6 +358,7 @@ Giao diện là các trang HTML tĩnh gọi API JSON dưới tiền tố `/api` 
 | Doanh thu *(Sprint 3)* | `GET /api/revenue?shop_id=...&range=today\|7d\|30d\|month` hoặc `from`, `to`; `group=day\|month` | Chủ quán |
 | Lịch sử, đặt lại, gợi ý *(Sprint 3)* | `GET /api/my/orders`, `GET /api/my/orders/<id>`, `POST /api/my/orders/<id>/claim`, `POST /api/my/orders/<id>/reorder`; `GET /api/shops/<id>/suggestions` | Khách có tài khoản; gợi ý: mọi người |
 | Khiếu nại *(Sprint 3)* | Khách: `POST, GET /api/orders/<id>/complaints`, `GET /api/my/complaints`; chủ quán: `GET /api/merchant/complaints`, `PUT /api/merchant/complaints/<id>/reply`, `PUT /api/merchant/complaints/<id>/close` | Khách; chủ quán |
+| Thanh toán chuyển khoản *(FR-27)* | `GET /api/payment-banks`; chủ quán: `PUT, GET /api/shops/<sid>/payment-config`, `POST /api/shops/<sid>/payment-config/test`, `GET /api/shops/<sid>/payment-checkouts`, `POST /api/shops/<sid>/payment-checkouts/<pid>/confirm`, `GET /api/shops/<sid>/payment-receipts`, `PUT /api/shops/<sid>/payment-receipts/<rid>/resolve`; khách: `GET /api/payments/<pid>`, `POST /api/payments/<pid>/check`, `GET /api/payments/mine`; nội bộ: `POST /api/internal/payments/reconcile` (cần `PAYMENT_RECONCILE_SECRET`) | Khách; chủ quán; hệ thống |
 | Quản trị *(Sprint 3)* | `GET /api/admin/users`, `PUT /api/admin/users/<id>/status`, `GET /api/admin/statistics`; khóa/mở khóa quán qua `PUT /api/shops/<id>` (trường `status`) | Admin |
 
 Khi gửi đơn (`POST /api/orders`), trình duyệt gửi kèm hai trường:
@@ -348,19 +374,28 @@ Toàn bộ tài liệu nằm trong thư mục [`docs/`](./docs).
 
 | Tài liệu | Trạng thái |
 |---|---|
-| Danh sách chức năng | ✅ Cập nhật sau Sprint 3: 48/49 chức năng đã Hoàn thành; còn FR-27 (thanh toán trực tuyến, thuộc phần Mở rộng, ngoài kế hoạch) ([xem file](docs/Danh_sach_chuc_nang_QuickOrder.xlsx)) |
-| Đặc tả yêu cầu phần mềm (SRS) | ✅ Bản 1.0, hoàn thành Sprint 0–1 ([xem file](docs/SRS_QuickOrder_v1.0.docx)) |
+| Danh sách chức năng | ✅ Cập nhật sau Sprint 3: 49/49 chức năng đã Hoàn thành, gồm FR-27 (thanh toán chuyển khoản VietQR) ([xem file](docs/Danh_sach_chuc_nang_QuickOrder.xlsx)) |
+| Đặc tả yêu cầu phần mềm (SRS) | ✅ Bản 1.1, cập nhật theo hệ thống đã triển khai ([xem bản 1.1](docs/SRS_QuickOrder_v1.1.docx)); bản gốc 1.0 ([xem file](docs/SRS_QuickOrder_v1.0.docx)) |
+| Kiến trúc hệ thống | ✅ Mô tả kiến trúc 3 lớp, thành phần và luồng dữ liệu ([xem file](docs/ARCHITECTURE.md)) |
 | Use Case | ✅ Bản 1.0, hoàn thành Sprint 0–1 ([xem file](docs/UseCase_QuickOrder_v1.0.docx)) |
-| User Story | ✅ Cập nhật sau Sprint 3: 50/51 story đã Hoàn thành; còn US-24 (thanh toán trực tuyến, Mở rộng), bản 0.1 ([xem file](docs/UserStory_QuickOrder_v0.1.xlsx)) |
-| Thiết kế CSDL (ERD) | ✅ Sơ đồ Mermaid theo `schema.sql` hiện tại, kèm quy ước ràng buộc ([xem file](https://github.com/Caykhongg/CNPM-TULO/blob/NguyenXuanAnh27-patch-1/docs/ERD_QuickOrder.md), nhánh `NguyenXuanAnh27-patch-1`) |
+| User Story | ✅ Cập nhật sau Sprint 3: 51/51 story đã Hoàn thành, gồm US-24 (thanh toán chuyển khoản), bản 0.1 ([xem file](docs/UserStory_QuickOrder_v0.1.xlsx)) |
+| Thiết kế CSDL (ERD) | ✅ Sơ đồ Mermaid theo `schema.sql` hiện tại, kèm quy ước ràng buộc ([xem file](docs/ERD_QuickOrder.md)) |
 | Class Diagram | ✅ Bản 1.0, hoàn thành Sprint 0–1 ([xem file](docs/ClassDiagram_QuickOrder_v1.0.docx)) |
 | Sequence Diagram | ✅ Bản 1.0, 9 luồng chính ([xem file](docs/SequenceDiagram_QuickOrder_v1.0.docx)); luồng đặt món theo API thực tế ở [sequence_diagram.md](sequence_diagram.md) |
 | Wireframe (Figma) | 🔄 Đã có bản phác thảo 10 màn hình ([xem file](docs/Wireframe_QuickOrder_v1.0.docx)); chờ dựng trên Figma, thêm liên kết Figma khi xong |
 | Hợp đồng API đơn hàng (Sprint 4) | ✅ Mô tả đúng những gì code làm; 5 chỗ lệch với SRS đã sửa trong code ([xem file](docs/API_QuickOrder_Sprint4.md)) |
-| Báo cáo đo hiệu năng | ✅ Đo 8 và 24 bàn cùng lúc: 0 lỗi, không mất đơn, yêu cầu chậm nhất 412 ms ([xem file](https://github.com/Caykhongg/CNPM-TULO/blob/NguyenXuanAnh27-patch-1/docs/perf/Do_hieu_nang_QuickOrder.md), nhánh `NguyenXuanAnh27-patch-1`). Đo ở máy chủ qua localhost, chưa gồm độ trễ mạng của điện thoại |
-| Hướng dẫn sử dụng | ✅ Cho khách, chủ quán, quản trị viên ([xem file](https://github.com/Caykhongg/CNPM-TULO/blob/NguyenXuanAnh27-patch-1/docs/Huong_dan_su_dung_QuickOrder.md), nhánh `NguyenXuanAnh27-patch-1`) |
+| Báo cáo đo hiệu năng | ✅ Đo 8 và 24 bàn cùng lúc: 0 lỗi, không mất đơn, yêu cầu chậm nhất 412 ms ([xem file](docs/perf/Do_hieu_nang_QuickOrder.md)). Đo ở máy chủ qua localhost, chưa gồm độ trễ mạng của điện thoại |
+| Hướng dẫn sử dụng | ✅ Cho khách, chủ quán, quản trị viên ([xem file](docs/Huong_dan_su_dung_QuickOrder.md)) |
 | Cấu trúc Route/API | ✅ Bản 1.1 sau Sprint 3: giữ thiết kế ban đầu (mục 1 đến 8) và thêm mục 9 liệt kê API đã triển khai ([xem file](docs/RouteAPI_QuickOrder_v1.0.docx)) |
-| Test case và báo cáo kiểm thử | 🔄 Đã có test case [Sprint 1](QuickOrder_TestCases_Sprint1.docx) và [Sprint 2](QuickOrder_TestCases_Sprint2.docx); Sprint 2: 16 ca Đạt, 2 ca không áp dụng (TC-073, TC-074: hệ thống không có trang tìm quán). Sprint 4: 199 test Python và 14 test Node tự động đều đạt (xem mục [Chạy kiểm thử](#chạy-kiểm-thử)); **chưa có** bộ test case thủ công Sprint 3 và báo cáo kiểm thử. Test tự động nằm trong `QuickOrder/tests` |
+| Thanh toán chuyển khoản (xAPI, VietQR) | ✅ Cách hoạt động, cấu hình và thử ngân hàng thật ([xem file](docs/Thanh_toan_XAPI_QuickOrder.md)) |
+| Kịch bản demo | ✅ Các bước trình diễn khi báo cáo ([xem file](docs/Kich_ban_demo_QuickOrder.md)) |
+| Test case và báo cáo kiểm thử | 🔄 Bộ test case tổng hợp Python + Playwright ([xem file](QuickOrder_TestCase(test%20by%20Python%20%2B%20Playwright).xlsx)). Test tự động: 263 test Python và 26 test Node đều đạt (xem mục [Chạy kiểm thử](#chạy-kiểm-thử)), nằm trong `QuickOrder/tests`. Bộ test case thủ công đang được rà soát và bổ sung các ca thanh toán |
+
+## 💳 Thanh toán chuyển khoản
+
+Chủ quán chọn ngân hàng, nhập số tài khoản và token/URL xAPI ngay trên web. Không nhập token thì quán xác nhận thủ công; kết nối xAPI hợp lệ thì máy chủ tự đối soát. QR của mỗi phiếu điền sẵn số tiền và mã riêng; đơn chỉ gửi tới quán sau khi xác nhận thanh toán. Tác vụ nền chạy trong máy chủ, không cần mở lệnh quét riêng.
+
+Xem [hướng dẫn cập nhật thư mục VS Code và thử ngân hàng thật](docs/Thanh_toan_XAPI_QuickOrder.md). Token được mã hóa ở máy chủ, không trả về trình duyệt. Khi nhận tiền thật, CSDL phải được lưu bền vững (ổ đĩa lưu trữ lâu dài) và máy chủ phải duy trì hoạt động.
 
 ## 🤝 Quy trình làm việc nhóm
 
@@ -392,9 +427,16 @@ refactor: tách hàm tính giá
 | 1–3 | ✅ **Sprint 0** | Chuẩn bị, phân tích và thiết kế (SRS, Use Case, ERD, wireframe...) |
 | 4–5 | ✅ **Sprint 1** | Nền tảng, menu và QR bàn: đăng ký/đăng nhập, phân quyền, quản lý quán, menu, bàn và mã QR, quét QR xem menu |
 | 6–7 | ✅ **Sprint 2** | Gọi món và xử lý đơn: giỏ hàng, gửi đơn, thanh toán, thông báo đơn mới, cập nhật trạng thái |
-| 8 | ✅ **Sprint 3** | Tính năng nâng cao, hoàn thành 16 chức năng và nâng tổng lên 48/49 chức năng của cả dự án. **Chủ quán:** mã giảm giá (FR-46), tính tiền theo bàn (FR-45), xem đánh giá (FR-49), thống kê doanh thu và món bán chạy (FR-47, FR-48), xử lý khiếu nại thuộc quán mình (FR-55). **Khách:** áp dụng mã giảm giá (FR-23), đánh giá quán và món (FR-24), lịch sử đơn (FR-21), đặt lại món (FR-22), gợi ý món (FR-25), gửi khiếu nại (FR-26). **Quản trị viên:** khóa/mở khóa quán (FR-51), quản lý người dùng (FR-52), quản lý danh mục (FR-53), thống kê toàn hệ thống (FR-54). Còn lại FR-27 (thanh toán trực tuyến) thuộc phần Mở rộng, ngoài kế hoạch |
-| 9 | ✅ **Sprint 4** | Kiểm thử, đo hiệu năng và sửa lỗi. **Đã làm:** sửa 5 chỗ lệch giữa SRS và code (số lượng mỗi món 1 đến 99, chống gửi trùng đơn ở máy chủ, đơn gửi kèm mã QR bàn để mã đã đổi không đặt được, một thông báo thống nhất khi quán không nhận đơn, báo tên món khi món vừa hết); hợp đồng API đơn hàng; theo dõi đơn của khách; ảnh chụp tùy chọn lúc đặt; đo hiệu năng 8 và 24 bàn; test tăng lên 199 Python và 14 Node; dọn thư mục `QuickOrder/QuickOrder` cũ và gỡ `database.db` khỏi git. **Chưa làm:** bộ test case thủ công Sprint 3 và báo cáo kiểm thử |
-| 10 | 🔄 **Sprint 5 (Hoàn thiện)** | **Đã có:** README, kịch bản demo ([docs/Kich_ban_demo_QuickOrder.md](docs/Kich_ban_demo_QuickOrder.md)), hướng dẫn sử dụng, ERD. **Còn lại:** deploy và điền link demo, dựng Figma và thêm link, báo cáo, slide |
+| 8 | ✅ **Sprint 3** | Tính năng nâng cao, hoàn thành 16 chức năng và nâng tổng lên 48/49 chức năng tại thời điểm đó. **Chủ quán:** mã giảm giá (FR-46), tính tiền theo bàn (FR-45), xem đánh giá (FR-49), thống kê doanh thu và món bán chạy (FR-47, FR-48), xử lý khiếu nại thuộc quán mình (FR-55). **Khách:** áp dụng mã giảm giá (FR-23), đánh giá quán và món (FR-24), lịch sử đơn (FR-21), đặt lại món (FR-22), gợi ý món (FR-25), gửi khiếu nại (FR-26). **Quản trị viên:** khóa/mở khóa quán (FR-51), quản lý người dùng (FR-52), quản lý danh mục (FR-53), thống kê toàn hệ thống (FR-54). FR-27 (thanh toán trực tuyến) được làm sau đó ở bước hoàn thiện |
+| 9 | ✅ **Sprint 4** | Kiểm thử, đo hiệu năng và sửa lỗi. **Đã làm:** sửa 5 chỗ lệch giữa SRS và code (số lượng mỗi món 1 đến 99, chống gửi trùng đơn ở máy chủ, đơn gửi kèm mã QR bàn để mã đã đổi không đặt được, một thông báo thống nhất khi quán không nhận đơn, báo tên món khi món vừa hết); hợp đồng API đơn hàng; theo dõi đơn của khách; ảnh chụp tùy chọn lúc đặt; đo hiệu năng 8 và 24 bàn; test tăng lên 199 Python và 14 Node (sau này lên 263 và 26); dọn thư mục `QuickOrder/QuickOrder` cũ và gỡ `database.db` khỏi git. **Còn thiếu:** bộ test case thủ công Sprint 3 và báo cáo kiểm thử, được bổ sung ở Sprint 5 |
+| 10 | ✅ **Sprint 5 (Hoàn thiện)** | **Hoàn thành FR-27** thanh toán chuyển khoản VietQR với đối soát xAPI, chế độ tự động/thủ công, biên lai và trạng thái REVIEW (PR #68, 21/11/2026), đưa tổng lên **49/49 chức năng** và **51/51 user story**. Tài liệu: README, SRS v1.1, ARCHITECTURE, kịch bản demo, hướng dẫn sử dụng, ERD, tài liệu thanh toán xAPI. Deploy bản demo trên Render. Phát hành **v1.0 (19/11/2026)** và **v1.1 (21/11/2026)**. Test lên 263 Python và 26 Node. **Còn lại:** dựng Figma và thêm link, rà soát bộ test case thủ công, báo cáo, slide |
+
+## 🏷️ Phiên bản phát hành
+
+| Bản | Ngày | Nội dung |
+|---|---|---|
+| **v1.1** (Latest) | 21/11/2026 | Hoàn thành 49/49 chức năng: thanh toán chuyển khoản VietQR, cấu hình ngân hàng, đối soát xAPI; 263 test Python và 26 test Node |
+| **v1.0** | 19/11/2026 | Bản đầy đủ chức năng chính của Sprint 0–4 |
 
 ## Đặt và theo dõi đơn của khách
 
@@ -414,15 +456,8 @@ Kiểm thử logic JavaScript (nếu có Node.js): chạy `node --test tests/tes
 | 4 | Nguyễn Tú Anh | BIT253653 | Backend, Database |
 | 5 | Triệu Nguyễn Khải | BIT253659 | Tester, DevOps |
 
-**Giảng viên hướng dẫn:** *(điền tên)*
+**Giảng viên hướng dẫn:** Ths. Nguyễn Thị Vân Anh
 
 ---
 
 <p align="center">Đồ án môn Công nghệ phần mềm – Đại học CMC – Hà Nội, 2026</p>
-
-
-### Ngân hàng và thanh toán chuyển khoản
-
-Chủ quán chọn ngân hàng, nhập số tài khoản và token/URL xAPI ngay trên web. Không nhập token thì quán xác nhận thủ công; kết nối xAPI hợp lệ thì server tự đối soát. QR của mỗi phiếu điền sẵn số tiền và mã riêng; chỉ gửi đơn tới quán sau khi xác nhận thanh toán. Tác vụ nền chạy trong server, không cần mở lệnh quét riêng.
-
-Xem [hướng dẫn cập nhật folder VS Code và thử ngân hàng thật](docs/Thanh_toan_XAPI_QuickOrder.md). Token được mã hóa ở server, không trả về trình duyệt. Khi nhận tiền thật, CSDL phải được lưu bền vững và server phải duy trì hoạt động.
